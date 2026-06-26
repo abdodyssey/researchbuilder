@@ -1,0 +1,10 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+output/
+*.docx
+*.md
+!templates/index.html
+!README.md

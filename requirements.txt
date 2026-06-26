@@ -1,0 +1,12 @@
+httpx
+python-dotenv
+pydantic
+groq
+google-generativeai
+openai
+tavily-python
+rich
+tenacity
+fastapi
+uvicorn
+python-docx
