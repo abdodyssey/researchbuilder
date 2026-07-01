@@ -2,7 +2,11 @@ import json
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from schemas.agent_schemas import LiteratureSearchInput, LiteratureSearchOutput, Reference
+from schemas.agent_schemas import (
+    LiteratureSearchInput,
+    LiteratureSearchOutput,
+    Reference,
+)
 from tools.tavily_search import multi_search
 from utils.llm_client import call_llm
 from utils.prompt_builder import build_system_prompt
@@ -70,7 +74,7 @@ Return JSON dengan format persis seperti ini:
     from utils.llm_client import extract_json
 
     data = extract_json(raw)
-    
+
     references = []
     selected = data.get("selected_references", [])
     if not selected and "references" in data:
@@ -82,22 +86,21 @@ Return JSON dengan format persis seperti ini:
         # Try to parse index if it is a string
         if isinstance(idx, str) and idx.isdigit():
             idx = int(idx)
-            
+
         if idx is not None and 0 <= idx < len(raw_results):
             orig = raw_results[idx]
             ref_id = f"ref_{len(references) + 1:03d}"
-            references.append(Reference(
-                id=ref_id,
-                title=orig.get("title", "Judul tidak ditemukan"),
-                url=orig.get("url", ""),
-                snippet=orig.get("snippet", ""),
-                relevance_score=float(item.get("relevance_score", 0.0) or 0.0),
-                source_type=item.get("source_type", "web"),
-                author=item.get("author", "Anonim"),
-                year=str(item.get("year", "n.d."))
-            ))
+            references.append(
+                Reference(
+                    id=ref_id,
+                    title=orig.get("title", "Judul tidak ditemukan"),
+                    url=orig.get("url", ""),
+                    snippet=orig.get("snippet", ""),
+                    relevance_score=float(item.get("relevance_score", 0.0) or 0.0),
+                    source_type=item.get("source_type", "web"),
+                    author=item.get("author", "Anonim"),
+                    year=str(item.get("year", "n.d.")),
+                )
+            )
 
-    return LiteratureSearchOutput(
-        references=references,
-        search_queries_used=queries
-    )
+    return LiteratureSearchOutput(references=references, search_queries_used=queries)

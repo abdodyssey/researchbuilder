@@ -112,8 +112,8 @@ export default function LandingPage() {
       a: "Bisa, fitur ini tersedia khusus untuk pengguna dengan paket langganan Premium. Anda dapat mengunggah file .docx kosong sebagai templat agar hasil ekspor artikel mengikuti struktur format instansi Anda."
     },
     {
-      q: "Bagaimana sistem kredit pemrosesan dihitung?",
-      a: "Setiap kali Anda menjalankan pipeline penulisan draf baru, 1 kredit akan digunakan dari akun Anda. Paket Trial mendapatkan 10 kredit sekali pakai, paket Basic mendapatkan 30 kredit per bulan, dan paket Premium memiliki akses tanpa batas (Unlimited)."
+      q: "Bagaimana sistem penggunaan token dihitung?",
+      a: "Pemakaian token dihitung secara proporsional sesuai jumlah panjang dokumen (referensi, draf, dan revisi) yang diproses dan dihasilkan oleh model AI pada setiap langkah riset Anda. Paket Trial mendapatkan 100.000 token, Basic 500.000 token/bulan, dan Premium memiliki akses tanpa batas (Unlimited)."
     }
   ];
 
@@ -344,7 +344,7 @@ export default function LandingPage() {
               <h3 className="text-xl font-bold text-text-primary mt-4">Gratis</h3>
               <p className="text-xs text-text-secondary mt-2">Untuk mencoba alur penulisan otomatis</p>
               <ul className="text-xs text-text-secondary space-y-2 mt-6 border-t border-border-color/60 pt-6">
-                <li className="flex items-center gap-2">✓ 10 kuota kredit uji coba</li>
+                <li className="flex items-center gap-2">✓ 100.000 token komputasi AI</li>
                 <li className="flex items-center gap-2">✓ 1 target draf penulisan</li>
                 <li className="flex items-center gap-2">✓ Bahasa Indonesia & Inggris</li>
                 <li className="text-text-muted">✗ Unggah templat dokumen .docx</li>
@@ -365,7 +365,7 @@ export default function LandingPage() {
               </h3>
               <p className="text-xs text-text-secondary mt-2">Untuk penulis akademis kasual</p>
               <ul className="text-xs text-text-secondary space-y-2 mt-6 border-t border-border-color/60 pt-6">
-                <li className="flex items-center gap-2">✓ 30 kuota kredit / bulan</li>
+                <li className="flex items-center gap-2">✓ 500.000 token / bulan</li>
                 <li className="flex items-center gap-2">✓ Maksimal 10 draf tersimpan</li>
                 <li className="flex items-center gap-2">✓ Bahasa Indonesia & Inggris</li>
                 <li className="text-text-muted">✗ Unggah templat dokumen .docx</li>
@@ -389,7 +389,7 @@ export default function LandingPage() {
               </h3>
               <p className="text-xs text-text-secondary mt-2">Untuk peneliti & akademisi aktif</p>
               <ul className="text-xs text-text-secondary space-y-2 mt-6 border-t border-border-color/60 pt-6">
-                <li className="flex items-center gap-2">✓ Kuota kredit Unlimited</li>
+                <li className="flex items-center gap-2">✓ Kuota token komputasi Unlimited</li>
                 <li className="flex items-center gap-2">✓ Draf tersimpan tak terbatas</li>
                 <li className="flex items-center gap-2">✓ Bahasa Indonesia & Inggris</li>
                 <li className="flex items-center gap-2">✓ Unggah templat dokumen .docx</li>
