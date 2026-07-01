@@ -9,7 +9,15 @@ from groq import Groq
 
 load_dotenv()
 
-_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+_client = None
+
+def get_client():
+    global _client
+    if _client is None:
+        api_key = os.getenv("GROQ_API_KEY", "missing_api_key_on_vercel")
+        _client = Groq(api_key=api_key)
+    return _client
+
 _current_model = None
 _usage_store: dict = {}
 _active_pipeline_id: str = ""
@@ -27,7 +35,7 @@ def call_llm_with_usage(
     fallback_model = "llama-3.1-8b-instant"
 
     def _call(m):
-        return _client.chat.completions.create(
+        return get_client().chat.completions.create(
             model=m,
             messages=message,
             temperature=temperature,
@@ -129,7 +137,7 @@ def call_llm(
 
     for attempt in range(1, 4):
         try:
-            resp = _client.chat.completions.create(
+            resp = get_client().chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=temperature,
@@ -148,7 +156,7 @@ def call_llm(
                 if model != fallback_model:
                     print(f"[INFO] Falling back to {fallback_model}...")
                     try:
-                        resp = _client.chat.completions.create(
+                        resp = get_client().chat.completions.create(
                             model=fallback_model,
                             messages=messages,
                             temperature=temperature,
@@ -167,7 +175,7 @@ def call_llm(
             if model != fallback_model:
                 print(f"[INFO] Falling back temporarily to {fallback_model} due to API status error...")
                 try:
-                    resp = _client.chat.completions.create(
+                    resp = get_client().chat.completions.create(
                         model=fallback_model,
                         messages=messages,
                         temperature=temperature,
