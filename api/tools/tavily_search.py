@@ -4,7 +4,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
+_client = None
+
+def get_client():
+    global _client
+    if _client is None:
+        api_key = os.getenv("TAVILY_API_KEY", "missing_api_key_on_vercel")
+        _client = TavilyClient(api_key=api_key)
+    return _client
 
 
 import re
@@ -26,7 +33,7 @@ def normalize_title(title: str) -> str:
 
 
 def search(query: str, max_results: int = 5) -> list[dict]:
-    resp = _client.search(query=query, max_results=max_results)
+    resp = get_client().search(query=query, max_results=max_results)
     results = []
     for r in resp.get("results", []):
         results.append({
