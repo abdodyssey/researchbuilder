@@ -53,8 +53,14 @@ def call_llm_with_usage(
 
 def record_usage(pipeline_id: str, agent: str, usage: dict):
     if pipeline_id not in _usage_store:
-        _usage_store[pipeline_id] = usage
-    _usage_store[pipeline_id][agent] = usage
+        _usage_store[pipeline_id] = {}
+    if agent not in _usage_store[pipeline_id]:
+        _usage_store[pipeline_id][agent] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        
+    _usage_store[pipeline_id][agent]["prompt_tokens"] += usage.get("prompt_tokens", 0)
+    _usage_store[pipeline_id][agent]["completion_tokens"] += usage.get("completion_tokens", 0)
+    _usage_store[pipeline_id][agent]["total_tokens"] += usage.get("total_tokens", 0)
+    
     _usage_store[pipeline_id]["total"] = {
         k: sum(v[k] for a, v in _usage_store[pipeline_id].items() if a != "total")
         for k in ["prompt_tokens", "completion_tokens", "total_tokens"]
@@ -101,11 +107,13 @@ def set_current_model(model_name: str):
 def track_usage(pipeline_id: str, agent: str, usage: dict):
     if pipeline_id not in _usage_store:
         _usage_store[pipeline_id] = {}
-    _usage_store[pipeline_id][agent] = {
-        "prompt_tokens": usage.get("prompt_tokens", 0),
-        "completion_tokens": usage.get("completion_tokens", 0),
-        "total_tokens": usage.get("total_tokens", 0),
-    }
+    if agent not in _usage_store[pipeline_id]:
+        _usage_store[pipeline_id][agent] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        
+    _usage_store[pipeline_id][agent]["prompt_tokens"] += usage.get("prompt_tokens", 0)
+    _usage_store[pipeline_id][agent]["completion_tokens"] += usage.get("completion_tokens", 0)
+    _usage_store[pipeline_id][agent]["total_tokens"] += usage.get("total_tokens", 0)
+    
     _usage_store[pipeline_id]["total"] = {
         k: sum(v[k] for a, v in _usage_store[pipeline_id].items() if a != "total")
         for k in ["prompt_tokens", "completion_tokens", "total_tokens"]

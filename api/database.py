@@ -3,7 +3,9 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/researchpilot.db")
+is_vercel = os.environ.get("VERCEL")
+default_db = "sqlite:////tmp/researchpilot.db" if is_vercel else "sqlite:///./data/researchpilot.db"
+DATABASE_URL = os.getenv("DATABASE_URL", default_db)
 
 engine = create_engine(
     DATABASE_URL,

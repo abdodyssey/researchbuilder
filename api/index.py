@@ -1,4 +1,9 @@
 import os
+import sys
+
+# Add the current directory (api/) to sys.path so Vercel can resolve local imports
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import glob
 import json
 import uuid
@@ -20,7 +25,7 @@ from utils.state_manager import load_state, STATE_FILE, PipelineState
 from sqlalchemy.orm import Session
 from database import get_db, init_db
 from models import User
-from auth import get_current_user, check_and_consume_credit, decode_token
+from auth import get_current_user, check_token_limit, decode_token
 from config.plans import get_plan
 
 
@@ -65,6 +70,7 @@ def bg_run_pipeline(
     pipeline_id: str,
     template_path: Optional[str] = None,
     max_references: Optional[int] = None,
+    user_id: Optional[str] = None,
 ):
     try:
         active_runs[pipeline_id] = "running"
@@ -78,6 +84,20 @@ def bg_run_pipeline(
             max_references=max_references,
         )
         active_runs[pipeline_id] = "completed"
+        
+        if user_id:
+            from database import SessionLocal
+            from models import User
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.id == user_id).first()
+                if user:
+                    usage = get_usage(pipeline_id)
+                    total_tokens = usage.get("total", {}).get("total_tokens", 0)
+                    user.tokens_used += total_tokens
+                    db.commit()
+            finally:
+                db.close()
     except Exception as e:
         print(f"Error in background pipeline: {e}")
         active_runs[pipeline_id] = f"failed: {str(e)}"
@@ -92,8 +112,8 @@ async def api_generate(
     if not req.tema:
         raise HTTPException(status_code=400, detail="Tema is required")
 
-    # 1.1 Protect with Auth + Credit Check
-    check_and_consume_credit(current_user, db)
+    # 1.1 Protect with Auth + Token Check
+    check_token_limit(current_user, db)
 
     # 1.3 Enforce Template Upload per Plan
     plan = get_plan(current_user.plan)
@@ -132,7 +152,8 @@ async def api_generate(
         if req.template_id:
             import shutil
             template_filename = f"{req.template_id}.docx"
-            library_path = os.path.join("templates", template_filename)
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            library_path = os.path.join(base_dir, "templates", template_filename)
             if os.path.exists(library_path):
                 temp_name = f"template_{pid}.docx"
                 template_path = os.path.join(OUTPUT_DIR, temp_name)
@@ -198,6 +219,7 @@ async def api_generate(
         pid,
         template_path,
         max_refs,
+        current_user.id,
     )
     
     return {"status": "started", "pipeline_id": pid}
@@ -468,15 +490,15 @@ async def api_login(req: LoginRequest, db: Session = Depends(get_db)):
 @app.get("/api/auth/me")
 async def api_me(current_user: User = Depends(get_current_user)):
     plan = get_plan(current_user.plan)
-    credits = plan["credits"]
+    tokens = plan["tokens"]
     return {
         "id": current_user.id,
         "email": current_user.email,
         "full_name": current_user.full_name,
         "plan": current_user.plan,
-        "credits_used": current_user.credits_used,
-        "credits_total": credits,
-        "credits_remaining": current_user.credits_remaining(credits),
+        "tokens_used": current_user.tokens_used,
+        "tokens_total": tokens,
+        "tokens_remaining": current_user.tokens_remaining(tokens),
         "trial_ends_at": current_user.trial_ends_at.isoformat() if current_user.trial_ends_at else None,
         "trial_expired": current_user.is_trial_expired(),
     }
@@ -634,8 +656,8 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
     if payment.status != "paid":
         payment.status = "paid"
         user.plan = payment.plan
-        user.credits_used = 0
-        user.credits_reset_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        user.tokens_used = 0
+        user.tokens_reset_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
         
     return {"status": "success", "message": f"User upgraded to {user.plan}"}

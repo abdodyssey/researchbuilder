@@ -18,8 +18,8 @@ class User(Base):
     full_name = Column(String, nullable=True)
 
     plan = Column(String, default="trial")  # trial | basic | premium
-    credits_used = Column(Integer, default=0)
-    credits_reset_at = Column(DateTime, default=utcnow)
+    tokens_used = Column(Integer, default=0)
+    tokens_reset_at = Column(DateTime, default=utcnow)
 
     trial_started_at = Column(DateTime, default=utcnow)
     trial_ends_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30))
@@ -34,10 +34,10 @@ class User(Base):
             return False
         return utcnow() > self.trial_ends_at
 
-    def credits_remaining(self, plan_credits: int) -> int:
-        if plan_credits == -1:
+    def tokens_remaining(self, plan_tokens: int) -> int:
+        if plan_tokens == -1:
             return -1  # unlimited
-        return max(0, plan_credits - self.credits_used)
+        return max(0, plan_tokens - self.tokens_used)
 
 
 class Payment(Base):

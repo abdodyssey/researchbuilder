@@ -71,8 +71,8 @@ def get_current_user_optional(
     return db.query(User).filter(User.id == user_id).first()
 
 
-# ── Credit Check ──────────────────────────────────────────────────────────────
-def check_and_consume_credit(user: User, db: Session) -> None:
+# ── Token Check ──────────────────────────────────────────────────────────────
+def check_token_limit(user: User, db: Session) -> None:
     from config.plans import get_plan
     from datetime import datetime, timezone
 
@@ -84,22 +84,18 @@ def check_and_consume_credit(user: User, db: Session) -> None:
         )
 
     plan = get_plan(user.plan)
-    credits = plan["credits"]
+    tokens = plan["tokens"]
 
     # Reset bulanan
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if user.credits_reset_at and (now - user.credits_reset_at).days >= 30:
-        user.credits_used = 0
-        user.credits_reset_at = now
+    if user.tokens_reset_at and (now - user.tokens_reset_at).days >= 30:
+        user.tokens_used = 0
+        user.tokens_reset_at = now
         db.commit()
 
     # Cek limit
-    if credits != -1 and user.credits_used >= credits:
+    if tokens != -1 and user.tokens_used >= tokens:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"Credit habis. Anda telah menggunakan {user.credits_used}/{credits} credit bulan ini."
+            detail=f"Token habis. Anda telah menggunakan {user.tokens_used}/{tokens} token bulan ini."
         )
-
-    # Consume credit
-    user.credits_used += 1
-    db.commit()

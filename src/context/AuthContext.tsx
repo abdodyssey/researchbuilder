@@ -8,9 +8,9 @@ export interface User {
   email: string;
   full_name: string;
   plan: "trial" | "basic" | "premium";
-  credits_used: number;
-  credits_total: number;
-  credits_remaining: number;
+  tokens_used: number;
+  tokens_total: number;
+  tokens_remaining: number;
   trial_expired: boolean;
 }
 
@@ -27,7 +27,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
+export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || (process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:8000");
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);

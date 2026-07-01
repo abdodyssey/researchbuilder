@@ -57,7 +57,7 @@ const PLAN_META = {
 };
 
 const PLANS_FEATURES = [
-  { label: "Kuota Kredit", trial: "10 kredit", basic: "30 kredit / bln", premium: "Unlimited" },
+  { label: "Kuota Token", trial: "100.000 token", basic: "500.000 token / bln", premium: "Unlimited" },
   { label: "Maks. Referensi per Draf", trial: "5 referensi", basic: "10 referensi", premium: "15 referensi" },
   { label: "Riwayat Draf", trial: "7 hari", basic: "30 hari", premium: "Selamanya" },
   { label: "Unggah Templat .docx", trial: false, basic: false, premium: true },
@@ -129,10 +129,10 @@ export default function BillingPage() {
   }
 
   const currentPlanMeta = PLAN_META[user.plan] || PLAN_META.trial;
-  const creditsTotal = user.credits_total === -1 ? null : user.credits_total;
-  const creditsUsed = user.credits_used;
-  const creditsRemaining = user.credits_remaining;
-  const usagePct = creditsTotal ? Math.min(100, Math.round((creditsUsed / creditsTotal) * 100)) : 0;
+  const tokensTotal = user.tokens_total === -1 ? null : user.tokens_total;
+  const tokensUsed = user.tokens_used;
+  const tokensRemaining = user.tokens_remaining;
+  const usagePct = tokensTotal ? Math.min(100, Math.round((tokensUsed / tokensTotal) * 100)) : 0;
 
   const nextBillingDate = new Date();
   nextBillingDate.setDate(nextBillingDate.getDate() + 30);
@@ -234,7 +234,7 @@ export default function BillingPage() {
             {/* Features included */}
             <div className="mt-4 grid grid-cols-2 gap-2">
               {[
-                { label: "Kredit tersisa", value: creditsTotal === null ? "∞" : `${creditsRemaining}` },
+                { label: "Token tersisa", value: tokensTotal === null ? "∞" : `${tokensRemaining.toLocaleString()}` },
                 { label: "Maks. Referensi", value: user.plan === "premium" ? "15" : user.plan === "basic" ? "10" : "5" },
                 { label: "Riwayat draf", value: user.plan === "premium" ? "Selamanya" : user.plan === "basic" ? "30 hari" : "7 hari" },
                 { label: "Unggah templat", value: user.plan === "premium" ? "Ya" : "Tidak" },
@@ -250,7 +250,7 @@ export default function BillingPage() {
           {/* Usage Meter Card */}
           <Card className="!p-5 flex flex-col">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Penggunaan Kredit</span>
+              <span className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Penggunaan Token</span>
               <BarChart3 className="w-4 h-4 text-text-muted" />
             </div>
 
@@ -259,13 +259,13 @@ export default function BillingPage() {
                 <div className="w-10 h-10 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-center text-primary">
                   <Sparkles className="w-5 h-5" />
                 </div>
-                <p className="text-xs text-text-secondary">Kredit <strong className="text-text-primary">Unlimited</strong> — tidak ada batas penggunaan.</p>
+                <p className="text-xs text-text-secondary">Token <strong className="text-text-primary">Unlimited</strong> — tidak ada batas penggunaan.</p>
               </div>
             ) : (
               <>
                 <div className="flex items-end justify-between mb-2">
-                  <span className="text-2xl font-extrabold text-text-primary">{creditsRemaining}</span>
-                  <span className="text-xs text-text-muted">dari {creditsTotal} kredit</span>
+                  <span className="text-2xl font-extrabold text-text-primary">{tokensRemaining.toLocaleString()}</span>
+                  <span className="text-xs text-text-muted">dari {tokensTotal?.toLocaleString()} token</span>
                 </div>
                 <div className="w-full h-2 bg-bg-main rounded-full border border-border-color overflow-hidden mb-2">
                   <div
@@ -273,10 +273,10 @@ export default function BillingPage() {
                     style={{ width: `${100 - usagePct}%` }}
                   />
                 </div>
-                <p className="text-[10px] text-text-muted">{usagePct}% kredit telah digunakan ({creditsUsed} kredit)</p>
+                <p className="text-[10px] text-text-muted">{usagePct}% token telah digunakan ({tokensUsed.toLocaleString()} token)</p>
                 {usagePct > 80 && (
                   <div className="mt-3 p-2.5 bg-status-error/5 border border-status-error/20 rounded text-[11px] text-status-error">
-                    Kredit hampir habis. Upgrade untuk akses tidak terbatas.
+                    Token hampir habis. Upgrade untuk akses tidak terbatas.
                   </div>
                 )}
               </>
@@ -376,7 +376,7 @@ export default function BillingPage() {
                   </div>
                   <div>
                     <p className="text-xs font-bold text-text-primary">Upgrade ke Basic — Rp 49.000/bln</p>
-                    <p className="text-[11px] text-text-secondary mt-0.5">30 kredit/bulan, riwayat 30 hari, review & skor kelayakan.</p>
+                    <p className="text-[11px] text-text-secondary mt-0.5">500.000 token/bulan, riwayat 30 hari, review & skor kelayakan.</p>
                   </div>
                 </div>
                 <Button
@@ -397,7 +397,7 @@ export default function BillingPage() {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-text-primary">Upgrade ke Premium — Rp 99.000/bln</p>
-                  <p className="text-[11px] text-text-secondary mt-0.5">Kredit unlimited, unggah templat .docx, riwayat permanen, prioritas antrean.</p>
+                  <p className="text-[11px] text-text-secondary mt-0.5">Token unlimited, unggah templat .docx, riwayat permanen, prioritas antrean.</p>
                 </div>
               </div>
               <Button

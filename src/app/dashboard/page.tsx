@@ -940,7 +940,7 @@ export default function DashboardPage() {
                     {user.full_name || user.email.split("@")[0]}
                   </span>
                   <span className="text-[9px] font-semibold text-text-muted">
-                    {user.credits_total === -1 ? "Premium Unlimited" : `${user.credits_remaining} Kredit`}
+                    {user.tokens_total === -1 ? "Premium Unlimited" : `${user.tokens_remaining.toLocaleString()} Token`}
                   </span>
                 </div>
               </div>
@@ -1095,7 +1095,7 @@ export default function DashboardPage() {
                   <p className="text-xs text-text-secondary mt-0.5">
                     {user?.plan === "trial"
                       ? "Upgrade ke Premium untuk mengunggah templat struktur kustom, kuota jurnal tak terbatas, dan draf permanen."
-                      : `Sisa kredit plan Anda hampir habis (${user?.credits_remaining} kredit tersisa). Upgrade plan Anda sekarang.`}
+                      : `Sisa token plan Anda hampir habis (${user?.tokens_remaining.toLocaleString()} token tersisa). Upgrade plan Anda sekarang.`}
                   </p>
                 </div>
               </div>
@@ -1166,16 +1166,16 @@ export default function DashboardPage() {
 
                 <Card className="!p-5 flex flex-col justify-between hover:border-indigo-400/30 transition-colors shadow-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider">Kredit / Sisa Kuota</span>
+                    <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider">Token / Sisa Kuota</span>
                     <div className="w-7 h-7 bg-indigo-400/10 border border-indigo-400/20 rounded-md flex items-center justify-center text-indigo-400">
                       <TrendingUp className="w-4 h-4" />
                     </div>
                   </div>
                   <div className="mt-4">
                     <h3 className="text-2xl font-extrabold text-text-primary">
-                      {user?.credits_total === -1 ? "Unlimited" : `${user?.credits_remaining} / ${user?.credits_total}`}
+                      {user?.tokens_total === -1 ? "Unlimited" : `${user?.tokens_remaining?.toLocaleString()} / ${user?.tokens_total?.toLocaleString()}`}
                     </h3>
-                    <p className="text-[9px] text-text-muted mt-0.5">Kredit akun plan {user?.plan}</p>
+                    <p className="text-[9px] text-text-muted mt-0.5">Token akun plan {user?.plan}</p>
                   </div>
                 </Card>
               </div>
