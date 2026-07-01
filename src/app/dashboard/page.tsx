@@ -807,7 +807,7 @@ export default function DashboardPage() {
 
   const showUpgradeBanner =
     user?.plan === "trial" ||
-    (user && user.credits_total !== -1 && user.credits_remaining < 3);
+    (user && user.tokens_total !== -1 && user.tokens_remaining < 3);
 
   const backendDownloadUrl = (filename: string) => {
     return `http://127.0.0.1:8000/api/download/${currentPipelineId}/${filename}?token=${token || ""}`;

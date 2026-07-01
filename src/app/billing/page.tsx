@@ -254,7 +254,7 @@ export default function BillingPage() {
               <BarChart3 className="w-4 h-4 text-text-muted" />
             </div>
 
-            {creditsTotal === null ? (
+            {tokensTotal === null ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
                 <div className="w-10 h-10 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-center text-primary">
                   <Sparkles className="w-5 h-5" />
