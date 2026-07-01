@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 import os
 
 is_vercel = os.environ.get("VERCEL")
-default_db = "sqlite:////tmp/researchpilot.db" if is_vercel else "sqlite:///./data/researchpilot.db"
+default_db = "sqlite:////tmp/researchbuilder.db" if is_vercel else "sqlite:///./data/researchbuilder.db"
 DATABASE_URL = os.getenv("DATABASE_URL", default_db)
 
 engine = create_engine(

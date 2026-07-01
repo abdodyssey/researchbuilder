@@ -60,7 +60,7 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="font-outfit font-extrabold text-xl text-text-primary tracking-tight">
-              ResearchPilot
+              ResearchBuilder
             </h1>
             <p className="text-[10px] text-text-secondary uppercase tracking-widest leading-none mt-0.5">Platform Penulisan Akademik</p>
           </div>

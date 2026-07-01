@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ResearchPilot — Multi-Agent Academic Writer",
+  title: "ResearchBuilder — Multi-Agent Academic Writer",
   description: "SaaS Multi-Agent pipeline akademik ditenagai LLM & Tavily Search",
 };
 

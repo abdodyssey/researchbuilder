@@ -47,7 +47,7 @@ def clean_workspace(output_dir: str):
     print("Workspace cleaned successfully.")
 
 def main():
-    parser = argparse.ArgumentParser(description="ResearchPilot - AI Research Article Generator")
+    parser = argparse.ArgumentParser(description="ResearchBuilder - AI Research Article Generator")
     parser.add_argument("--tema", help="Tema umum artikel")
     parser.add_argument("--bahasa", default=os.getenv("DEFAULT_LANGUAGE", "id"), choices=["id", "en"])
     parser.add_argument("--output", default=os.getenv("OUTPUT_DIR", "./output"))

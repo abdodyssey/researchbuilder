@@ -31,7 +31,7 @@ from config.plans import get_plan
 
 load_dotenv()
 
-app = FastAPI(title="ResearchPilot Web UI")
+app = FastAPI(title="ResearchBuilder Web UI")
 
 app.add_middleware(
     CORSMiddleware,
@@ -438,7 +438,7 @@ async def api_delete_run(pipeline_id: str, current_user: User = Depends(get_curr
 
 @app.get("/")
 async def home():
-    return {"message": "Welcome to ResearchPilot API"}
+    return {"message": "Welcome to ResearchBuilder API"}
 
 @app.get("/api/token-usage/{pipeline_id}")
 async def api_token_usage(pipeline_id: str, current_user: User = Depends(get_current_user)):
@@ -557,9 +557,9 @@ async def create_payment_link(
         "Content-Type": "application/json"
     }
     payload = {
-        "name": f"ResearchPilot {plan_name}",
+        "name": f"ResearchBuilder {plan_name}",
         "amount": amount,
-        "description": f"Upgrade ke {plan_name} ResearchPilot",
+        "description": f"Upgrade ke {plan_name} ResearchBuilder",
         "redirectUrl": "http://127.0.0.1:8000/",
         "email": current_user.email,
         "customerName": current_user.full_name or "User"
@@ -672,7 +672,7 @@ async def mock_checkout_page(payment_id: str, plan: str, email: str, redirect_ur
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ResearchPilot — Sandboxed Checkout</title>
+    <title>ResearchBuilder — Sandboxed Checkout</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -838,7 +838,7 @@ async def mock_checkout_page(payment_id: str, plan: str, email: str, redirect_ur
         <div class="invoice-details">
             <div class="detail-row">
                 <span class="detail-label">Produk</span>
-                <span class="detail-value">ResearchPilot {plan_name}</span>
+                <span class="detail-value">ResearchBuilder {plan_name}</span>
             </div>
             <div class="detail-row">
                 <span class="detail-label">Email Pengguna</span>

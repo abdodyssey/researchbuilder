@@ -105,7 +105,7 @@ export default function LandingPage() {
     },
     {
       q: "Apakah data penelitian dan draf saya aman dari kebocoran?",
-      a: "Ya. ResearchPilot menerapkan isolasi data multi-user yang sangat ketat di tingkat basis data dan sistem penyimpanan. Pengguna lain sama sekali tidak dapat mengakses, melihat, atau mengunduh draf atau riwayat riset Anda."
+      a: "Ya. ResearchBuilder menerapkan isolasi data multi-user yang sangat ketat di tingkat basis data dan sistem penyimpanan. Pengguna lain sama sekali tidak dapat mengakses, melihat, atau mengunduh draf atau riwayat riset Anda."
     },
     {
       q: "Apakah saya bisa mengunggah templat dokumen saya sendiri?",
@@ -128,7 +128,7 @@ export default function LandingPage() {
             </div>
             <div>
               <span className="font-outfit font-extrabold text-sm text-text-primary tracking-tight">
-                ResearchPilot
+                ResearchBuilder
               </span>
             </div>
           </div>
@@ -179,7 +179,7 @@ export default function LandingPage() {
           </h1>
           
           <p className="text-sm md:text-base text-text-secondary mt-6 max-w-3xl leading-relaxed">
-            ResearchPilot menyusun draf naskah jurnal lengkap secara instan. Temukan novelty riset secara otomatis, peroleh referensi pustaka yang valid, dan review kualitas draf naskah Anda agar sesuai dengan template jurnal penerbit target.
+            ResearchBuilder menyusun draf naskah jurnal lengkap secara instan. Temukan novelty riset secara otomatis, peroleh referensi pustaka yang valid, dan review kualitas draf naskah Anda agar sesuai dengan template jurnal penerbit target.
           </p>
 
           <div className="mt-10 flex flex-wrap justify-center gap-4">
@@ -221,7 +221,7 @@ export default function LandingPage() {
           <Badge variant="trial" className="mb-3">ALUR KERJA PENULISAN</Badge>
           <h2 className="text-2xl md:text-3xl font-bold font-outfit text-text-primary tracking-tight">Bagaimana Alur Kerja Penulisan Otomatis?</h2>
           <p className="text-xs md:text-sm text-text-secondary mt-2">
-            ResearchPilot memproses tugas penulisan akademik yang kompleks secara sistematis mulai dari penentuan topik hingga naskah akhir siap ekspor.
+            ResearchBuilder memproses tugas penulisan akademik yang kompleks secara sistematis mulai dari penentuan topik hingga naskah akhir siap ekspor.
           </p>
         </div>
 
@@ -293,7 +293,7 @@ export default function LandingPage() {
       <section id="benefits" className="max-w-7xl mx-auto px-6 py-20 border-b border-border-color">
         <div className="text-center max-w-2xl mx-auto mb-16">
           <Badge variant="trial" className="mb-3">KEUNGGULAN UTAMA</Badge>
-          <h2 className="text-2xl font-bold font-outfit text-text-primary tracking-tight">Kelebihan Menggunakan ResearchPilot</h2>
+          <h2 className="text-2xl font-bold font-outfit text-text-primary tracking-tight">Kelebihan Menggunakan ResearchBuilder</h2>
           <p className="text-xs text-text-secondary mt-1">Didesain khusus untuk mempercepat penulisan draf ilmiah Anda tanpa mengorbankan kaidah akademis.</p>
         </div>
 
@@ -408,7 +408,7 @@ export default function LandingPage() {
         <div className="text-center mb-16">
           <Badge variant="trial" className="mb-3">PERTANYAAN UMUM</Badge>
           <h2 className="text-2xl font-bold font-outfit text-text-primary tracking-tight">Tanya Jawab Seputar Layanan</h2>
-          <p className="text-xs text-text-secondary mt-1">Beberapa hal yang paling sering ditanyakan oleh pengguna ResearchPilot</p>
+          <p className="text-xs text-text-secondary mt-1">Beberapa hal yang paling sering ditanyakan oleh pengguna ResearchBuilder</p>
         </div>
 
         <div className="space-y-4">
@@ -437,7 +437,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="w-full border-t border-border-color bg-bg-card/20 py-8 mt-auto">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-text-muted">
-          <span>&copy; {new Date().getFullYear()} ResearchPilot. Hak Cipta Dilindungi.</span>
+          <span>&copy; {new Date().getFullYear()} ResearchBuilder. Hak Cipta Dilindungi.</span>
           <div className="flex gap-6">
             <a href="#" className="hover:text-text-primary transition-colors">Syarat Ketentuan</a>
             <a href="#" className="hover:text-text-primary transition-colors">Kebijakan Privasi</a>

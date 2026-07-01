@@ -845,7 +845,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="leading-none">
                   <h2 className="font-outfit font-extrabold text-sm text-text-primary">
-                    ResearchPilot
+                    ResearchBuilder
                   </h2>
                   <span className="text-[9px] text-text-muted uppercase tracking-widest block mt-0.5">Workspace Akademik</span>
                 </div>
@@ -1120,7 +1120,7 @@ export default function DashboardPage() {
                     Selamat datang kembali, {user?.full_name || user?.email.split("@")[0]}!
                   </h2>
                   <p className="text-xs md:text-sm text-text-secondary leading-relaxed">
-                    Butuh publikasi jurnal berstandar internasional tapi terkendala waktu, metodologi, atau format template yang rumit? ResearchPilot menyusun naskah akademik terstruktur dan melakukan review kualitas secara instan agar draf Anda siap disubmit ke penerbit sasaran.
+                    Butuh publikasi jurnal berstandar internasional tapi terkendala waktu, metodologi, atau format template yang rumit? ResearchBuilder menyusun naskah akademik terstruktur dan melakukan review kualitas secara instan agar draf Anda siap disubmit ke penerbit sasaran.
                   </p>
                   <div className="pt-2">
                     <Button
@@ -1234,7 +1234,7 @@ export default function DashboardPage() {
               <div className="space-y-4 pt-4">
                 <div className="border-b border-border-color pb-2">
                   <h3 className="text-sm font-bold font-outfit text-text-primary">Panduan & Bantuan Akademik</h3>
-                  <p className="text-[11px] text-text-secondary mt-0.5">Pelajari cara memaksimalkan bantuan penulisan dari ResearchPilot.</p>
+                  <p className="text-[11px] text-text-secondary mt-0.5">Pelajari cara memaksimalkan bantuan penulisan dari ResearchBuilder.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1499,7 +1499,7 @@ export default function DashboardPage() {
                 {/* Guide cards on right */}
                 <div className="lg:col-span-1 space-y-4">
                   <Card className="p-5 shadow-sm space-y-4">
-                    <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block border-b border-border-color pb-2">Mengapa Menggunakan ResearchPilot?</span>
+                    <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block border-b border-border-color pb-2">Mengapa Menggunakan ResearchBuilder?</span>
                     <div className="space-y-4">
                       {[
                         { step: "1", title: "Solusi Novelty (Kebaruan Riset)", desc: "Menemukan celah riset unik berdasarkan database akademik yang valid agar tulisan Anda berbobot." },
@@ -2089,10 +2089,10 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <Badge variant="premium" className="mb-2">Panduan Pengguna Baru</Badge>
-                    <h3 className="text-sm font-bold font-outfit text-text-primary">Selamat Datang di ResearchPilot!</h3>
+                    <h3 className="text-sm font-bold font-outfit text-text-primary">Selamat Datang di ResearchBuilder!</h3>
                   </div>
                   <p className="text-xs text-text-secondary leading-relaxed">
-                    ResearchPilot adalah platform penulisan akademik kolaboratif bertenaga AI. Sebelum memulai riset pertama Anda, mari pelajari panduan singkat workspace ini.
+                    ResearchBuilder adalah platform penulisan akademik kolaboratif bertenaga AI. Sebelum memulai riset pertama Anda, mari pelajari panduan singkat workspace ini.
                   </p>
                 </div>
               )}

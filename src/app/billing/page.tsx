@@ -164,7 +164,7 @@ export default function BillingPage() {
               <div className="w-6 h-6 bg-bg-card border border-border-color rounded flex items-center justify-center text-primary">
                 <FlaskConical className="w-3.5 h-3.5" />
               </div>
-              <span className="font-outfit font-extrabold text-sm text-text-primary tracking-tight">ResearchPilot</span>
+              <span className="font-outfit font-extrabold text-sm text-text-primary tracking-tight">ResearchBuilder</span>
             </div>
             <div className="h-4 w-px bg-border-color" />
             <span className="text-xs font-semibold text-text-secondary">Tagihan & Paket</span>
