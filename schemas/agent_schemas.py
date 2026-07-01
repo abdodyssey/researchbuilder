@@ -9,20 +9,22 @@ class TopicNarrowingInput(BaseModel):
 
 class TopicNarrowingOutput(BaseModel):
     focused_topic: str
-    research_questions: list[str] = Field(min_length=2, max_length=5)
-    keywords: list[str]
-    article_type: Literal["literature_review", "empirical", "conceptual"]
+    research_questions: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    article_type: str = "literature_review"
     suggested_title: str
 
 
 # ── Agent 2: Literature Search ────────────────────────────────────────────────
 class Reference(BaseModel):
-    id: str
-    title: str
-    url: str
-    snippet: str
-    relevance_score: float = 0.0
-    source_type: Literal["journal", "conference", "report", "web"] = "web"
+    id: Optional[str] = "ref_default"
+    title: Optional[str] = "Judul tidak ditemukan"
+    url: Optional[str] = ""
+    snippet: Optional[str] = ""
+    relevance_score: Optional[float] = 0.0
+    source_type: Optional[str] = "web"
+    author: Optional[str] = "Anonim"
+    year: Optional[str] = "2026"
 
 class LiteratureSearchInput(BaseModel):
     focused_topic: str
@@ -64,7 +66,7 @@ class Section(BaseModel):
 
 class OutlineInput(BaseModel):
     focused_topic: str
-    article_type: Literal["literature_review", "empirical", "conceptual"]
+    article_type: str = "literature_review"
     research_questions: list[str]
     synthesis_summary: str
     key_themes: list[str]
@@ -124,6 +126,24 @@ class ReviewOutput(BaseModel):
     review_summary: str
 
 
+# ── Journal Constraints ────────────────────────────────────────────────────────
+class JournalConstraints(BaseModel):
+    abstract_max_words: int = 250
+    abstract_format: str = "satu paragraf tanpa sitasi"
+    keywords_min: int = 3
+    keywords_max: int = 6
+    citation_style: str = "APA"
+    required_sections: list[str] = []
+    needs_tables: bool = False
+    needs_figures: bool = False
+    figure_as_placeholder: bool = True
+    columns: int = 1
+    font: str = "Times New Roman"
+    font_size: int = 12
+    language: str = "id"
+    additional_notes: str = ""
+
+
 # ── Pipeline State ────────────────────────────────────────────────────────────
 class StageState(BaseModel):
     status: Literal["pending", "running", "done", "failed"] = "pending"
@@ -136,12 +156,19 @@ class PipelineState(BaseModel):
     status: Literal["running", "completed", "failed"] = "running"
     input: TopicNarrowingInput
     template_path: Optional[str] = None
+    journal_constraints: Optional[JournalConstraints] = None
     stages: dict[str, StageState] = Field(default_factory=lambda: {
         "topic_narrowing": StageState(),
         "literature_search": StageState(),
         "synthesis": StageState(),
         "outline": StageState(),
         "writing": StageState(),
+        "draft_adaptation": StageState(),
         "review": StageState(),
     })
     final_output_path: Optional[str] = None
+    token_usage: dict = Field(default_factory=dict)
+    user_id: Optional[str] = None
+    citation_style: str = "default"
+    is_draft_review: Optional[bool] = False
+    draft_file_path: Optional[str] = None

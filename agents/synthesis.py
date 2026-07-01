@@ -37,6 +37,7 @@ Sintesis referensi di atas. Return JSON:
         ],
         temperature=0.3,
         max_tokens=2000,
+        agent="synthesis",
     )
     raw = raw.strip()
     from utils.llm_client import extract_json

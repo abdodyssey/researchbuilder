@@ -22,7 +22,7 @@ def refs_to_citation_list(references) -> str:
     return "\n\n".join(lines)
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
-def write_section(inp: WritingInput, template_text: str = "") -> WritingSectionOutput:
+def write_section(inp: WritingInput, template_text: str = "", constraints=None) -> WritingSectionOutput:
     refs_text = refs_to_citation_list(inp.references_detail)
     refs_text = truncate_to_tokens(refs_text, 1000)
 
@@ -35,6 +35,21 @@ KHUSUS UNTUK METODOLOGI PENELITIAN:
 - DILARANG KERAS mengarang eksperimen empiris fiktif, kuesioner fiktif, wawancara fiktif, atau pengumpulan data lapangan fiktif yang tidak benar-benar dilakukan.
 - Jelaskan metode penelitian secara realistis sebagai studi berbasis literatur (literature review), analisis data sekunder, studi komparatif literatur, atau sintesis konseptual berdasarkan referensi yang tersedia.
 - Rincikan langkah-langkah pencarian, penyaringan, dan pengelompokan literatur secara sistematis."""
+
+    constraints_text = ""
+    if constraints:
+        abstract_note = ""
+        if "abstrak" in inp.section.title.lower() or "abstract" in inp.section.title.lower():
+            abstract_note = f"PENTING: Abstrak maksimal {constraints.abstract_max_words} kata. Format: {constraints.abstract_format}. Tanpa sitasi."
+        
+        constraints_text = f"""
+PANDUAN JURNAL:
+{abstract_note}
+- Format sitasi: {constraints.citation_style}
+- Jika butuh tabel: gunakan format markdown tabel (| col | col |)
+- Jika butuh gambar/grafik: tulis [FIGURE: deskripsi gambar yang dibutuhkan]
+- Bahasa output: {constraints.language}
+"""
 
     user_msg = f"""Tulis section artikel ilmiah dalam bahasa {inp.context.bahasa}.
 
@@ -52,6 +67,8 @@ ATURAN PENULISAN:
 - HINDARI KALIMAT FILLER ATAU PENGULANGAN TEMPLATE di akhir/awal section (seperti "Dengan demikian, penelitian ini berkontribusi...", "Diharapkan penelitian ini...", dll.). Tulisan harus mengalir secara profesional menyambung ke bagian berikutnya.{methodology_instruction}
 - GAYA PENULISAN TARGET: Sesuaikan gaya, nada, dan layout penulisan dengan pedoman template target berikut jika ada:
 {template_text}
+
+{constraints_text}
 
 Section: "{inp.section.title}"
 Poin yang harus dibahas:
@@ -81,13 +98,14 @@ Balas HANYA JSON valid:
         ],
         temperature=0.3,
         max_tokens=2000,
+        agent="writing",
     )
     data = extract_json(raw)
     data["word_count"] = len(data.get("content", "").split())
     return WritingSectionOutput(**data)
 
 
-def run(sections, context, references_detail, template_text: str = "") -> WritingOutput:
+def run(sections, context, references_detail, template_text: str = "", constraints=None) -> WritingOutput:
     results = []
     for section in sections:
         inp = WritingInput(
@@ -96,7 +114,7 @@ def run(sections, context, references_detail, template_text: str = "") -> Writin
             references_detail=references_detail,
         )
         try:
-            result = write_section(inp, template_text)
+            result = write_section(inp, template_text, constraints=constraints)
         except Exception as e:
             result = WritingSectionOutput(
                 section_id=section.id,

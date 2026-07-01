@@ -11,7 +11,7 @@ SYSTEM = build_system_prompt("peer reviewer for academic journals")
 
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
-def run(inp: ReviewInput, article_type: str = "literature_review", template_text: str = "") -> ReviewOutput:
+def run(inp: ReviewInput, article_type: str = "literature_review", template_text: str = "", constraints=None) -> ReviewOutput:
     draft_text = truncate_to_tokens(inp.full_draft, 1200)
     
     # Determine constraints based on article_type
@@ -32,6 +32,18 @@ def run(inp: ReviewInput, article_type: str = "literature_review", template_text
     if template_text:
         template_instruction = f"\n- GAYA & OUTLINE PENULISAN TARGET: Sesuaikan gaya ringkasan dan format abstrak dengan panduan berikut jika ada:\n{template_text}"
 
+    constraints_text = ""
+    if constraints:
+        constraints_text = f"""
+PANDUAN JURNAL UNTUK REVIEW:
+- Abstrak maksimal: {constraints.abstract_max_words} kata
+- Keywords: {constraints.keywords_min}-{constraints.keywords_max} kata kunci
+- Format sitasi: {constraints.citation_style}
+- Section wajib: {constraints.required_sections}
+
+Dalam review, flag jika abstrak melebihi batas kata atau keywords kurang/lebih dari range.
+"""
+
     user_msg = f"""
 Review artikel ilmiah berikut sebagai peer reviewer jurnal.
 Topik: "{inp.focused_topic}"
@@ -44,6 +56,8 @@ ATURAN PEMBUATAN ABSTRAK (WAJIB DIPATUHI):
 {methodology_constraint}
 - Abstrak harus substantif (minimal 150 kata) dengan struktur lengkap: latar belakang (background), tujuan (objective), metode (methods), hasil/temuan (findings), dan kesimpulan (conclusion).
 - Tulis abstrak secara jujur dan akurat sesuai dengan isi draft di atas. Jangan mengarang data atau metode yang tidak ada di dalam draft.{template_instruction}
+
+{constraints_text}
 
 Balas HANYA dengan JSON valid, tanpa teks lain:
 {{
@@ -69,6 +83,7 @@ Balas HANYA dengan JSON valid, tanpa teks lain:
         ],
         temperature=0.3,
         max_tokens=2000,
+        agent="review",
     )
     
     try:

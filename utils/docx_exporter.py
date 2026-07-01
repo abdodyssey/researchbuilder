@@ -1,32 +1,89 @@
 import re
-from pathlib import Path
-import docx
+from docxtpl import DocxTemplate, RichText
 
-from utils.token_counter import truncate_to_tokens
+
+def build_bab_richtext(isi_bab: str) -> RichText:
+    """
+    Konversi isi bab yang berupa string dengan pemisah paragraf (\\n\\n)
+    menjadi RichText docxtpl, supaya tiap paragraf AI benar-benar jadi
+    paragraf baru di Word (bukan newline mentah yang di-collapse).
+    """
+    rt = RichText()
+    paragraphs = [p.strip() for p in isi_bab.split("\n\n") if p.strip()]
+    for i, para in enumerate(paragraphs):
+        if i > 0:
+            rt.add("\n")  # docxtpl RichText newline -> line break asli di Word
+        rt.add(para)
+    return rt
+
 
 def extract_template_text(template_path: str) -> str:
-    if not template_path:
+    import docx
+    try:
+        doc = docx.Document(template_path)
+        return "\n".join(p.text for p in doc.paragraphs)
+    except Exception:
         return ""
-    p_path = Path(template_path)
-    text = ""
-    if p_path.suffix.lower() == ".docx":
-        try:
-            doc = docx.Document(template_path)
-            lines = [p.text for p in doc.paragraphs if p.text.strip()]
-            text = "\n".join(lines)
-        except Exception:
-            text = ""
-    else:
-        try:
-            text = p_path.read_text(encoding="utf-8")
-        except Exception:
-            text = ""
+
+
+def export_to_docx(article_data: dict, template_path: str, output_path: str, md_path: str = None) -> str:
+    """
+    article_data harus punya struktur:
+    {
+        "judul_artikel": str,
+        "nama_penulis": str,
+        "afiliasi": str,
+        "email_korespondensi": str,
+        "abstrak": str,
+        "kata_kunci": str,
+        "daftar_bab": [
+            {"judul_bab": str, "isi_bab": str},  # isi_bab pisah paragraf pakai \n\n
+            ...
+        ],
+        "daftar_referensi": [
+            {"teks_sitasi": str},
+            ...
+        ],
+    }
+    """
+
+    # Periksa apakah template memiliki tag jinja
+    has_jinja_tags = False
+    if template_path:
+        txt = extract_template_text(template_path)
+        if "{{" in txt or "{%" in txt:
+            has_jinja_tags = True
             
-    # Truncate to a safe token limit to prevent exceeding API limits
-    return truncate_to_tokens(text, 1000)
+    if not has_jinja_tags and md_path:
+        # Fallback to manual replacement for custom templates
+        export_markdown_to_docx_fallback(md_path, output_path, template_path)
+        return output_path
+
+    doc = DocxTemplate(template_path)
+
+    context = {
+        "judul_artikel": article_data["judul_artikel"],
+        "nama_penulis": article_data["nama_penulis"],
+        "afiliasi": article_data["afiliasi"],
+        "email_korespondensi": article_data["email_korespondensi"],
+        "abstrak": build_bab_richtext(article_data["abstrak"]),
+        "kata_kunci": article_data["kata_kunci"],
+        "daftar_bab": [
+            {
+                "judul_bab": bab["judul_bab"],
+                "isi_bab": build_bab_richtext(bab["isi_bab"]),
+            }
+            for bab in article_data["daftar_bab"]
+        ],
+        "daftar_referensi": article_data["daftar_referensi"],
+    }
+
+    doc.render(context)
+    doc.save(output_path)
+    return output_path
 
 
-def export_markdown_to_docx(md_path: str, docx_path: str, template_path: str = None) -> None:
+def export_markdown_to_docx_fallback(md_path: str, docx_path: str, template_path: str = None) -> None:
     md_content = Path(md_path).read_text(encoding="utf-8")
     
     # 1. Parse metadata (title, abstract, keywords) from markdown frontmatter
@@ -218,6 +275,7 @@ def export_markdown_to_docx(md_path: str, docx_path: str, template_path: str = N
         _add_formatted_text(p, line)
         
     doc.save(docx_path)
+
 
 
 def _add_formatted_text(paragraph, text: str):

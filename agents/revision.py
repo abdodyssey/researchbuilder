@@ -59,7 +59,8 @@ Kembalikan HANYA JSON valid dengan format berikut (tanpa teks penjelasan lain):
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": user_msg},
         ],
-        temperature=0.3
+        temperature=0.3,
+        agent="revision",
     )
     
     data = extract_json(resp)

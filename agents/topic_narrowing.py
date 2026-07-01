@@ -2,7 +2,7 @@ import json
 from tenacity import retry, stop_after_attempt, wait_fixed
 from schemas.agent_schemas import TopicNarrowingInput, TopicNarrowingOutput
 from utils.prompt_builder import build_system_prompt
-from utils.llm_client import call_llm
+from utils.llm_client import call_llm, call_llm_with_usage
 
 SYSTEM = build_system_prompt("senior academic researcher specializing in topic scoping")
 
@@ -34,6 +34,7 @@ Return JSON dengan struktur:
         ],
         temperature=0.3,
         max_tokens=1000,
+        agent="topic_narrowing",
     )
     raw = raw.strip()
     from utils.llm_client import extract_json

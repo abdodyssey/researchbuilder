@@ -66,7 +66,7 @@ def main():
         return
 
     if not args.tema and not args.clean:
-        parser.error("Argument --tema diperlukan kecuali jika menggunakan --clean atau --list-runs")
+        parser.error("Argument --tema diperlukan kecuali jika menggunakan --clean or --list-runs")
 
     if args.tema:
         run_pipeline(
@@ -78,4 +78,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

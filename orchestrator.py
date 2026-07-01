@@ -1,28 +1,82 @@
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 from rich.console import Console
 
-from schemas.agent_schemas import (
-    TopicNarrowingInput, LiteratureSearchInput,
-    SynthesisInput, OutlineInput, WritingContext, ReviewInput, PipelineState
-)
-from utils.state_manager import create_pipeline, save_state, load_state, mark_stage
-from tools.file_writer import write_article, write_references
-
-import agents.topic_narrowing as a1
 import agents.literature_search as a2
-import agents.synthesis as a3
 import agents.outline as a4
-import agents.writing as a5
 import agents.review as a6
 import agents.revision as a7
+import agents.synthesis as a3
+import agents.topic_narrowing as a1
+import agents.writing as a5
+import agents.draft_adapter as a8
+from schemas.agent_schemas import (
+    LiteratureSearchInput,
+    OutlineInput,
+    PipelineState,
+    ReviewInput,
+    SynthesisInput,
+    TopicNarrowingInput,
+    WritingContext,
+)
+from tools.file_writer import write_article, write_references
+from utils.llm_client import set_active_pipeline_id
+from utils.state_manager import create_pipeline, load_state, mark_stage, save_state
 
 load_dotenv()
 console = Console()
 
 
-def run_pipeline(tema: str, bahasa: str = "id", output_dir: str = "./output", resume: bool = False, pipeline_id: str = None, template_path: str = None) -> str:
+def _add_token_usage(state, agent_name: str, resp):
+    try:
+        usage = {
+            "prompt_tokens": resp.usage.prompt_tokens,
+            "completion_tokens": resp.usage.completion_tokens,
+            "total_tokens": resp.usage.total_tokens,
+        }
+        if not hasattr(state, "token_usage") or state.token_usage is None:
+            state.token_usage = {}
+        state.token_usage[agent_name] = usage
+        # hitung total
+        state.token_usage["total"] = {
+            "prompt_tokens": sum(
+                [
+                    v["prompt_tokens"]
+                    for k, v in state.token_usage.items()
+                    if k != "total"
+                ]
+            ),
+            "completion_tokens": sum(
+                [
+                    v["completion_tokens"]
+                    for k, v in state.token_usage.items()
+                    if k != "total"
+                ]
+            ),
+            "total_tokens": sum(
+                [
+                    v["total_tokens"]
+                    for k, v in state.token_usage.items()
+                    if k != "total"
+                ]
+            ),
+        }
+    except Exception:
+        pass
+
+
+
+def run_pipeline(
+    tema: str,
+    bahasa: str = "id",
+    output_dir: str = "./output",
+    resume: bool = False,
+    pipeline_id: str = None,
+    template_path: str = None,
+    max_references: int | None = None,
+) -> str:
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     state = load_state(output_dir, pipeline_id) if (resume or pipeline_id) else None
@@ -40,17 +94,211 @@ def run_pipeline(tema: str, bahasa: str = "id", output_dir: str = "./output", re
         save_state(state, output_dir)
         console.print(f"[bold green]Resuming pipeline:[/] {state.pipeline_id}")
 
+    set_active_pipeline_id(state.pipeline_id)
 
     template_text = ""
     if state.template_path:
         from utils.docx_exporter import extract_template_text
+
         template_text = extract_template_text(state.template_path)
+
+    if template_text and state.journal_constraints is None:
+        console.print("\n[cyan][0/6] Parsing journal template constraints...[/]")
+        try:
+            from agents.template_parser import run as parse_template
+            constraints = parse_template(template_text)
+            state.journal_constraints = constraints
+            save_state(state, output_dir)
+            console.print(f"  v Constraints: abstrak max {constraints.abstract_max_words} kata, sitasi {constraints.citation_style}")
+        except Exception as e:
+            console.print(f"  [yellow]Warning: Template parsing failed ({e}), using defaults[/]")
+            from schemas.agent_schemas import JournalConstraints
+            state.journal_constraints = JournalConstraints()
+            save_state(state, output_dir)
+    elif not template_text and state.journal_constraints is None:
+        from schemas.agent_schemas import JournalConstraints
+        state.journal_constraints = JournalConstraints()
+        save_state(state, output_dir)
+
+    if state.is_draft_review:
+        if state.stages["topic_narrowing"].status != "done":
+            state = mark_stage(state, "topic_narrowing", "done", {
+                "focused_topic": state.input.tema_umum,
+                "research_questions": ["Analisis dan review draf artikel akademik"],
+                "keywords": ["review draf"],
+                "article_type": "literature_review",
+                "suggested_title": state.input.tema_umum
+            })
+            save_state(state, output_dir)
+            
+        if state.stages["literature_search"].status != "done":
+            state = mark_stage(state, "literature_search", "done", {
+                "references": [],
+                "search_queries_used": []
+            })
+            save_state(state, output_dir)
+            
+        if state.stages["synthesis"].status != "done":
+            state = mark_stage(state, "synthesis", "done", {
+                "key_themes": [],
+                "research_gaps": [],
+                "key_findings": [],
+                "synthesis_summary": "Draf diunggah langsung oleh pengguna.",
+                "positioning_statement": "N/A"
+            })
+            save_state(state, output_dir)
+            
+        if state.stages["outline"].status != "done":
+            state = mark_stage(state, "outline", "done", {
+                "title": state.input.tema_umum,
+                "abstract_hint": "",
+                "sections": [],
+                "estimated_total_words": 0
+            })
+            save_state(state, output_dir)
+            
+        if state.stages["writing"].status != "done":
+            from utils.docx_exporter import extract_draft_full_text, parse_markdown_sections
+            draft_text = extract_draft_full_text(state.draft_file_path)
+            if not draft_text:
+                draft_text = "Draf kosong atau gagal dibaca dari berkas."
+            draft_sections = parse_markdown_sections(draft_text)
+            if not draft_sections:
+                draft_sections = {"Draf Artikel Utama": draft_text}
+                
+            sections_list = []
+            for idx, (title, content) in enumerate(draft_sections.items()):
+                sections_list.append({
+                    "section_id": f"sec_{idx}",
+                    "title": title,
+                    "content": content,
+                    "word_count": len(content.split()),
+                    "citations_used": []
+                })
+            
+            state = mark_stage(state, "writing", "done", {"sections": sections_list})
+            save_state(state, output_dir)
+
+        w_output = state.stages["writing"].output
+
+        # Determine if we need to do anything
+        if state.stages["review"].status != "done":
+            # If draft_adaptation status is not done, we check initial compatibility first
+            if state.stages["draft_adaptation"].status != "done":
+                console.print("\n[cyan][Draft Review] Menganalisis kesesuaian draf dengan template...[/]")
+                try:
+                    full_draft = "\n\n".join(
+                        f"## {sec['title']}\n{sec['content']}" for sec in w_output["sections"]
+                    )
+                    initial_review = a6.run(
+                        ReviewInput(
+                            full_draft=full_draft,
+                            focused_topic=state.input.tema_umum,
+                            research_questions=["Analisis dan review draf artikel akademik"],
+                            references=[],
+                        ),
+                        article_type="literature_review",
+                        template_text=template_text,
+                        constraints=state.journal_constraints,
+                    )
+                    console.print(f"  v Skor Kesesuaian Awal: {initial_review.overall_score}/100")
+                except Exception as e:
+                    console.print(f"  [red]Error during initial review: {e}[/]")
+                    raise
+
+                # Convert reviewer issues to simple dicts
+                issues_list = []
+                if initial_review.issues:
+                    for iss in initial_review.issues:
+                        issues_list.append({
+                            "type": iss.type,
+                            "location": iss.location,
+                            "description": iss.description,
+                            "suggestion": iss.suggestion,
+                            "severity": iss.severity
+                        })
+
+                console.print(f"  v Skor Kesesuaian Awal: {initial_review.overall_score}/100. Menjalankan adaptasi format dan penyuntingan...")
+                
+                # Adapt
+                console.print("\n[cyan][Draft Review] Menyesuaikan draf ke template jurnal...[/]")
+                try:
+                    adapted = a8.run(
+                        draft_sections=w_output["sections"],
+                        constraints=state.journal_constraints,
+                        bahasa=bahasa,
+                        tema=tema,
+                        issues=issues_list,
+                    )
+                    w_output["sections"] = adapted
+                    state.stages["writing"].output["sections"] = adapted
+                    state = mark_stage(state, "draft_adaptation", "done", {"sections": adapted})
+                    save_state(state, output_dir)
+                    console.print(f"  v Berhasil menyesuaikan {len(adapted)} section")
+                except Exception as e:
+                    state = mark_stage(state, "draft_adaptation", "failed", error=str(e))
+                    save_state(state, output_dir)
+                    raise
+
+                # Final review on adapted sections
+                console.print("\n[cyan][Draft Review] Melakukan review akhir pada draf yang sudah disesuaikan...[/]")
+                try:
+                    full_draft_adapted = "\n\n".join(
+                        f"## {sec['title']}\n{sec['content']}" for sec in adapted
+                    )
+                    final_review = a6.run(
+                        ReviewInput(
+                            full_draft=full_draft_adapted,
+                            focused_topic=state.input.tema_umum,
+                            research_questions=["Analisis dan review draf artikel akademik"],
+                            references=[],
+                        ),
+                        article_type="literature_review",
+                        template_text=template_text,
+                        constraints=state.journal_constraints,
+                    )
+                    state = mark_stage(state, "review", "done", final_review.model_dump())
+                    save_state(state, output_dir)
+                    console.print(f"  v Skor Akhir: {final_review.overall_score}/100")
+                except Exception as e:
+                    state = mark_stage(state, "review", "failed", error=str(e))
+                    save_state(state, output_dir)
+                    raise
+            else:
+                # draft_adaptation is already done (from a previous session/run) but review is not done.
+                # Just run the final review on the current writing stage sections.
+                console.print("\n[cyan][Draft Review] Melakukan review pada draf (resumed)...[/]")
+                try:
+                    full_draft_resumed = "\n\n".join(
+                        f"## {sec['title']}\n{sec['content']}" for sec in w_output["sections"]
+                    )
+                    resumed_review = a6.run(
+                        ReviewInput(
+                            full_draft=full_draft_resumed,
+                            focused_topic=state.input.tema_umum,
+                            research_questions=["Analisis dan review draf artikel akademik"],
+                            references=[],
+                        ),
+                        article_type="literature_review",
+                        template_text=template_text,
+                        constraints=state.journal_constraints,
+                    )
+                    state = mark_stage(state, "review", "done", resumed_review.model_dump())
+                    save_state(state, output_dir)
+                    console.print(f"  v Skor: {resumed_review.overall_score}/100")
+                except Exception as e:
+                    state = mark_stage(state, "review", "failed", error=str(e))
+                    save_state(state, output_dir)
+                    raise
 
     # Agent 1
     if state.stages["topic_narrowing"].status != "done":
         console.print("\n[cyan][1/6] Topic Narrowing...[/]")
         try:
-            out = a1.run(TopicNarrowingInput(tema_umum=tema, bahasa=bahasa), template_text=template_text)
+            out = a1.run(
+                TopicNarrowingInput(tema_umum=tema, bahasa=bahasa),
+                template_text=template_text,
+            )
             state = mark_stage(state, "topic_narrowing", "done", out.model_dump())
             save_state(state, output_dir)
             console.print(f"  v Focused: {out.focused_topic}")
@@ -65,12 +313,14 @@ def run_pipeline(tema: str, bahasa: str = "id", output_dir: str = "./output", re
     if state.stages["literature_search"].status != "done":
         console.print("\n[cyan][2/6] Literature Search...[/]")
         try:
-            out = a2.run(LiteratureSearchInput(
-                focused_topic=t["focused_topic"],
-                keywords=t["keywords"],
-                research_questions=t["research_questions"],
-                max_references=int(os.getenv("MAX_REFERENCES", 10))
-            ))
+            out = a2.run(
+                LiteratureSearchInput(
+                    focused_topic=t["focused_topic"],
+                    keywords=t["keywords"],
+                    research_questions=t["research_questions"],
+                    max_references=max_references if max_references is not None else int(os.getenv("MAX_REFERENCES", 10)),
+                )
+            )
             state = mark_stage(state, "literature_search", "done", out.model_dump())
             save_state(state, output_dir)
             console.print(f"  v Found {len(out.references)} references")
@@ -86,15 +336,20 @@ def run_pipeline(tema: str, bahasa: str = "id", output_dir: str = "./output", re
         console.print("\n[cyan][3/6] Synthesis...[/]")
         try:
             from schemas.agent_schemas import Reference
+
             refs = [Reference(**r) for r in l["references"]]
-            out = a3.run(SynthesisInput(
-                focused_topic=t["focused_topic"],
-                research_questions=t["research_questions"],
-                references=refs
-            ))
+            out = a3.run(
+                SynthesisInput(
+                    focused_topic=t["focused_topic"],
+                    research_questions=t["research_questions"],
+                    references=refs,
+                )
+            )
             state = mark_stage(state, "synthesis", "done", out.model_dump())
             save_state(state, output_dir)
-            console.print(f"  v Themes: {len(out.key_themes)}, Gaps: {len(out.research_gaps)}")
+            console.print(
+                f"  v Themes: {len(out.key_themes)}, Gaps: {len(out.research_gaps)}"
+            )
         except Exception as e:
             state = mark_stage(state, "synthesis", "failed", error=str(e))
             save_state(state, output_dir)
@@ -106,18 +361,24 @@ def run_pipeline(tema: str, bahasa: str = "id", output_dir: str = "./output", re
     if state.stages["outline"].status != "done":
         console.print("\n[cyan][4/6] Outline...[/]")
         try:
-            out = a4.run(OutlineInput(
-                focused_topic=t["focused_topic"],
-                article_type=t["article_type"],
-                research_questions=t["research_questions"],
-                synthesis_summary=s["synthesis_summary"],
-                key_themes=s["key_themes"],
-                research_gaps=s["research_gaps"],
-                bahasa=bahasa
-            ), template_text=template_text)
+            out = a4.run(
+                OutlineInput(
+                    focused_topic=t["focused_topic"],
+                    article_type=t["article_type"],
+                    research_questions=t["research_questions"],
+                    synthesis_summary=s["synthesis_summary"],
+                    key_themes=s["key_themes"],
+                    research_gaps=s["research_gaps"],
+                    bahasa=bahasa,
+                ),
+                template_text=template_text,
+                constraints=state.journal_constraints,
+            )
             state = mark_stage(state, "outline", "done", out.model_dump())
             save_state(state, output_dir)
-            console.print(f"  v {len(out.sections)} sections, ~{out.estimated_total_words} words")
+            console.print(
+                f"  v {len(out.sections)} sections, ~{out.estimated_total_words} words"
+            )
         except Exception as e:
             state = mark_stage(state, "outline", "failed", error=str(e))
             save_state(state, output_dir)
@@ -129,7 +390,8 @@ def run_pipeline(tema: str, bahasa: str = "id", output_dir: str = "./output", re
     if state.stages["writing"].status != "done":
         console.print("\n[cyan][5/6] Writing sections...[/]")
         try:
-            from schemas.agent_schemas import Section, Reference
+            from schemas.agent_schemas import Reference, Section
+
             sections = [Section(**sec) for sec in o["sections"]]
             refs = [Reference(**r) for r in l["references"]]
             context = WritingContext(
@@ -137,13 +399,15 @@ def run_pipeline(tema: str, bahasa: str = "id", output_dir: str = "./output", re
                 article_type=t["article_type"],
                 synthesis_summary=s["synthesis_summary"],
                 positioning_statement=s["positioning_statement"],
-                bahasa=bahasa
+                bahasa=bahasa,
             )
-            out = a5.run(sections, context, refs, template_text=template_text)
+            out = a5.run(sections, context, refs, template_text=template_text, constraints=state.journal_constraints)
             state = mark_stage(state, "writing", "done", out.model_dump())
             save_state(state, output_dir)
             total_words = sum(sec.word_count for sec in out.sections)
-            console.print(f"  v Written {len(out.sections)} sections, ~{total_words} words")
+            console.print(
+                f"  v Written {len(out.sections)} sections, ~{total_words} words"
+            )
         except Exception as e:
             state = mark_stage(state, "writing", "failed", error=str(e))
             save_state(state, output_dir)
@@ -151,61 +415,91 @@ def run_pipeline(tema: str, bahasa: str = "id", output_dir: str = "./output", re
 
     w = state.stages["writing"].output
 
+    # Use adapted sections if available from draft_adaptation
+    if state.is_draft_review and state.stages["draft_adaptation"].status == "done":
+        adapted_output = state.stages["draft_adaptation"].output
+        if adapted_output and "sections" in adapted_output and not adapted_output.get("skipped"):
+            w["sections"] = adapted_output["sections"]
+
+    # Skip draft_adaptation for non-draft-review flows
+    if not state.is_draft_review and state.stages["draft_adaptation"].status != "done":
+        state = mark_stage(state, "draft_adaptation", "done", {"skipped": True})
+        save_state(state, output_dir)
+
     # Agent 6
     if state.stages["review"].status != "done":
         console.print("\n[cyan][6/6] Review & Auto-Revision...[/]")
         try:
             from schemas.agent_schemas import Reference
+
             refs = [Reference(**r) for r in l["references"]]
-            
+
             # Initial full draft
             full_draft = "\n\n".join(
                 f"## {sec['title']}\n{sec['content']}" for sec in w["sections"]
             )
-            
+
             # Run initial review
-            out = a6.run(ReviewInput(
-                full_draft=full_draft,
-                focused_topic=t["focused_topic"],
-                research_questions=t["research_questions"],
-                references=refs
-            ), article_type=t["article_type"], template_text=template_text)
-            
+            out = a6.run(
+                ReviewInput(
+                    full_draft=full_draft,
+                    focused_topic=t["focused_topic"],
+                    research_questions=t["research_questions"],
+                    references=refs,
+                ),
+                article_type=t["article_type"],
+                template_text=template_text,
+                constraints=state.journal_constraints,
+            )
+
             # Auto-revision loop if critical issues exist
-            critical_issues = [issue for issue in out.issues if issue.severity.lower() == "critical"]
-            
+            critical_issues = []
+            if not state.is_draft_review:
+                critical_issues = [
+                    issue for issue in out.issues if issue.severity.lower() == "critical"
+                ]
+
             if critical_issues:
-                console.print(f"  [yellow]Found {len(critical_issues)} critical issues. Running Auto-Revision pass...[/]")
-                
+                console.print(
+                    f"  [yellow]Found {len(critical_issues)} critical issues. Running Auto-Revision pass...[/]"
+                )
+
                 # Run revision agent
                 revised_sections = a7.run(
                     sections=w["sections"],
                     critical_issues=[issue.model_dump() for issue in critical_issues],
                     references=[r.model_dump() for r in refs],
-                    bahasa=bahasa
+                    bahasa=bahasa,
                 )
-                
+
                 # Update writing stage output with revised sections
                 w["sections"] = revised_sections
                 state.stages["writing"].output = w
-                
+
                 # Rebuild full draft with revised content
                 revised_draft = "\n\n".join(
                     f"## {sec['title']}\n{sec['content']}" for sec in revised_sections
                 )
-                
+
                 # Rerun review on revised draft
                 console.print("  [cyan]Running final review on revised draft...[/]")
-                out = a6.run(ReviewInput(
-                    full_draft=revised_draft,
-                    focused_topic=t["focused_topic"],
-                    research_questions=t["research_questions"],
-                    references=refs
-                ), article_type=t["article_type"], template_text=template_text)
-            
+                out = a6.run(
+                    ReviewInput(
+                        full_draft=revised_draft,
+                        focused_topic=t["focused_topic"],
+                        research_questions=t["research_questions"],
+                        references=refs,
+                    ),
+                    article_type=t["article_type"],
+                    template_text=template_text,
+                    constraints=state.journal_constraints,
+                )
+
             state = mark_stage(state, "review", "done", out.model_dump())
             save_state(state, output_dir)
-            console.print(f"  v Score: {out.overall_score}/100, Issues: {len(out.issues)}")
+            console.print(
+                f"  v Score: {out.overall_score}/100, Issues: {len(out.issues)}"
+            )
         except Exception as e:
             state = mark_stage(state, "review", "failed", error=str(e))
             save_state(state, output_dir)
@@ -217,6 +511,7 @@ def run_pipeline(tema: str, bahasa: str = "id", output_dir: str = "./output", re
     console.print("\n[cyan]Writing output files...[/]")
     from schemas.agent_schemas import Reference
     from utils.llm_client import get_current_model
+
     refs_list = [Reference(**x).model_dump() for x in l["references"]]
 
     article_path = write_article(
@@ -228,24 +523,58 @@ def run_pipeline(tema: str, bahasa: str = "id", output_dir: str = "./output", re
         keywords=r["keywords_final"],
         review_score=r["overall_score"],
         models_used=[get_current_model()],
+        citation_style=state.citation_style,
     )
-    write_references(output_dir, refs_list)
+    write_references(output_dir, refs_list, citation_style=state.citation_style)
 
     # Save copies of results for history
     try:
         import shutil
+
         history_dir = Path(output_dir) / "runs"
         history_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(article_path, history_dir / f"draft_article_{state.pipeline_id}.md")
-        shutil.copy(Path(output_dir) / "references.md", history_dir / f"references_{state.pipeline_id}.md")
-        
+        shutil.copy(
+            Path(output_dir) / "references.md",
+            history_dir / f"references_{state.pipeline_id}.md",
+        )
+
         # Export to DOCX and copy
-        from utils.docx_exporter import export_markdown_to_docx
+        from utils.docx_exporter import export_to_docx
+
+        article_data = {
+            "judul_artikel": o.get("title", ""),
+            "nama_penulis": "[Nama Penulis]",
+            "afiliasi": "[Afiliasi Penulis]",
+            "email_korespondensi": "[Email Penulis]",
+            "abstrak": r.get("abstract", ""),
+            "kata_kunci": ", ".join(r.get("keywords_final", [])),
+            "daftar_bab": [
+                {
+                    "judul_bab": sec.get("title", ""),
+                    "isi_bab": sec.get("content", "")
+                }
+                for sec in w["sections"]
+            ],
+            "daftar_referensi": [
+                {"teks_sitasi": f"[{ref['id']}] {ref.get('author', 'Anonim')} ({ref.get('year', 'n.d.')}). {ref.get('title', '')}. {ref.get('url', '')}"}
+                for ref in refs_list
+            ],
+        }
+
         docx_path = Path(output_dir) / "draft_article.docx"
-        export_markdown_to_docx(article_path, str(docx_path), template_path=state.template_path)
-        shutil.copy(str(docx_path), history_dir / f"draft_article_{state.pipeline_id}.docx")
+        export_to_docx(
+            article_data, template_path=state.template_path, output_path=str(docx_path), md_path=str(article_path)
+        )
+        state = mark_stage(state, "docx_export", "completed")
+
+        shutil.copy(
+            str(docx_path), history_dir / f"draft_article_{state.pipeline_id}.docx"
+        )
     except Exception as e:
-        console.print(f"[yellow]Warning: Could not save historical file copies or DOCX: {e}[/]")
+        console.print(
+            f"[yellow]Warning: Could not save historical file copies or DOCX: {e}[/]"
+        )
 
     state.status = "completed"
     state.final_output_path = article_path
