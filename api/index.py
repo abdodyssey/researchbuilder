@@ -53,13 +53,11 @@ load_dotenv()
 app = FastAPI(title="ResearchBuilder API")
 
 # CORS: Izinkan frontend (Vercel/localhost) mengakses API.
-# Konfigurasi via env var CORS_ORIGINS (comma-separated).
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
-
+# Mengizinkan semua origin (*) agar lancar diuji dari Vercel via ngrok.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False, # allow_credentials must be False if allow_origins includes "*"
     allow_methods=["*"],
     allow_headers=["*"],
 )
