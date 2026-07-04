@@ -30,8 +30,12 @@ jobs:
             cd ~/researchbuilder
             git pull origin main
             uv sync
-            pkill -f "uvicorn.*port.9123" || true
-            sleep 2
+            if [ -f .uvicorn.pid ]; then
+              kill $(cat .uvicorn.pid) 2>/dev/null || true
+              rm -f .uvicorn.pid
+              sleep 2
+            fi
             nohup .venv/bin/uvicorn api.index:app --host 0.0.0.0 --port 9123 >> uvicorn.log 2>&1 &
+            echo $! > .uvicorn.pid
             sleep 3
             curl -sf http://localhost:9123/ || exit 1
