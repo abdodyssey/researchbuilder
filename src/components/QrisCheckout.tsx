@@ -78,12 +78,7 @@ export function QrisCheckout({
     return () => clearInterval(timer);
   }, [status]);
 
-  useEffect(() => {
-    if (status === "paid") {
-      const timeout = setTimeout(onComplete, 2000);
-      return () => clearTimeout(timeout);
-    }
-  }, [status, onComplete]);
+
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -170,12 +165,15 @@ export function QrisCheckout({
           )}
 
           {status === "paid" && (
-            <div className="py-8 flex flex-col items-center gap-3">
+            <div className="py-8 flex flex-col items-center gap-3 w-full">
               <CheckCircle2 className="w-12 h-12 text-status-success" />
               <p className="text-sm font-bold text-text-primary">Pembayaran Berhasil!</p>
-              <p className="text-xs text-text-muted">
-                +{tokens.toLocaleString()} token ditambahkan.
+              <p className="text-xs text-text-muted text-center">
+                +{tokens.toLocaleString()} token ditambahkan ke saldo Anda.
               </p>
+              <Button onClick={onComplete} className="w-full mt-4">
+                Selesai
+              </Button>
             </div>
           )}
 
