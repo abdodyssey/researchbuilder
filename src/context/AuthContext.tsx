@@ -35,6 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
+    console.log("AuthContext: Using API_URL =", API_URL);
     // Load token from localStorage
     const savedToken = localStorage.getItem("token");
     if (savedToken) {
