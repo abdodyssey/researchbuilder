@@ -107,6 +107,7 @@ export default function BillingPage() {
     setQrisData(null);
     await refreshProfile();
     refetchInvoices();
+    window.location.reload();
   }
 
   if (!user) return null;
