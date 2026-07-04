@@ -30,7 +30,7 @@ jobs:
             cd ~/researchbuilder
             git pull origin main
             uv sync
-            pkill -f "uvicorn api.index" || true
+            pkill -f "uvicorn.*port.9123" || true
             sleep 2
             nohup .venv/bin/uvicorn api.index:app --host 0.0.0.0 --port 9123 >> uvicorn.log 2>&1 &
             sleep 3
