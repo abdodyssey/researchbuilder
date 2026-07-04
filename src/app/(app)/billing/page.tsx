@@ -19,7 +19,7 @@ import { useApiQuery } from "@/hooks/useApiQuery";
 import { QrisCheckout } from "@/components/QrisCheckout";
 
 const TOKEN_PACKAGES = [
-  { key: "starter", label: "Starter", tokens: 50000, price: 25000, desc: "Untuk mencoba fitur utama" },
+  { key: "starter", label: "Starter", tokens: 1000, price: 1000, desc: "Untuk mencoba fitur utama" },
   { key: "standard", label: "Standard", tokens: 200000, price: 75000, desc: "Untuk penulisan reguler" },
   { key: "bulk", label: "Bulk", tokens: 500000, price: 150000, desc: "Untuk penggunaan intensif" },
 ];
