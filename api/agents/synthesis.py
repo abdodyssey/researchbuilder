@@ -21,8 +21,19 @@ Referensi:
 
 Sintesis referensi di atas. Return JSON:
 {{
-  "key_themes": ["..."],
-  "research_gaps": ["..."],
+  "key_themes": [
+    {{
+      "theme_name": "Nama Tema Utama",
+      "synthesis": "Penjelasan singkat bagaimana tema ini dibahas lintas pustaka",
+      "references_ids": ["ref_001", "ref_002"]
+    }}
+  ],
+  "research_gaps": [
+    {{
+      "gap_description": "Penjelasan celah penelitian yang ditemukan",
+      "how_we_address_it": "Bagaimana penelitian kita akan mengisi celah tersebut"
+    }}
+  ],
   "key_findings": [
     {{"finding": "...", "supported_by": ["ref_001"]}}
   ],

@@ -24,6 +24,12 @@ PANDUAN JURNAL TARGET:
 Ikuti struktur section wajib dari jurnal jika tersedia.
 """
 
+    ref_list_text = ""
+    if hasattr(inp, "references") and inp.references:
+        ref_list_text = "\n\nREFERENSI YANG TERSEDIA UNTUK DISITASI:\n" + "\n".join(
+            f"- ID: {r.id} | {r.author} ({r.year}) - {r.title}" for r in inp.references
+        )
+
     user_msg = f"""
 Focused topic: "{inp.focused_topic}"
 Article type: {inp.article_type}
@@ -34,8 +40,11 @@ Research gaps: {inp.research_gaps}
 Synthesis summary: {inp.synthesis_summary[:1000]}
 {template_instruction}
 {constraints_text}
+{ref_list_text}
 
-Buat outline artikel ilmiah. Return JSON:
+Buat outline artikel ilmiah. Petunjuk pengisian 'references_to_cite': gunakan ID referensi yang tersedia di atas (misal: 'ref_001', 'ref_002') yang paling relevan dengan topik bahasan section tersebut. Jangan gunakan ID yang tidak ada di daftar.
+
+Return JSON:
 {{
   "title": "...",
   "abstract_hint": "...",

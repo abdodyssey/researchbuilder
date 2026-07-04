@@ -6,6 +6,7 @@ from typing import Literal, Optional
 class TopicNarrowingInput(BaseModel):
     tema_umum: str
     bahasa: Literal["id", "en"] = "id"
+    document_type: str = "artikel"
 
 class TopicNarrowingOutput(BaseModel):
     focused_topic: str
@@ -21,6 +22,7 @@ class Reference(BaseModel):
     title: Optional[str] = "Judul tidak ditemukan"
     url: Optional[str] = ""
     snippet: Optional[str] = ""
+    raw_content: Optional[str] = ""
     relevance_score: Optional[float] = 0.0
     source_type: Optional[str] = "web"
     author: Optional[str] = "Anonim"
@@ -42,14 +44,23 @@ class KeyFinding(BaseModel):
     finding: str
     supported_by: list[str]
 
+class KeyTheme(BaseModel):
+    theme_name: str
+    synthesis: str
+    references_ids: list[str]
+
+class ResearchGap(BaseModel):
+    gap_description: str
+    how_we_address_it: str
+
 class SynthesisInput(BaseModel):
     focused_topic: str
     research_questions: list[str]
     references: list[Reference]
 
 class SynthesisOutput(BaseModel):
-    key_themes: list[str]
-    research_gaps: list[str]
+    key_themes: list[KeyTheme]
+    research_gaps: list[ResearchGap]
     key_findings: list[KeyFinding]
     synthesis_summary: str
     positioning_statement: str
@@ -72,6 +83,7 @@ class OutlineInput(BaseModel):
     key_themes: list[str]
     research_gaps: list[str]
     bahasa: Literal["id", "en"] = "id"
+    references: list[Reference] = []
 
 class OutlineOutput(BaseModel):
     title: str
@@ -96,6 +108,7 @@ class WritingInput(BaseModel):
 class WritingSectionOutput(BaseModel):
     section_id: str
     title: str
+    fact_extraction: Optional[str] = None
     content: str
     word_count: int
     citations_used: list[str] = []
@@ -154,6 +167,7 @@ class PipelineState(BaseModel):
     pipeline_id: str
     created_at: str
     status: Literal["running", "completed", "failed"] = "running"
+    background_status: Optional[str] = None
     input: TopicNarrowingInput
     template_path: Optional[str] = None
     journal_constraints: Optional[JournalConstraints] = None
@@ -172,3 +186,32 @@ class PipelineState(BaseModel):
     citation_style: str = "default"
     is_draft_review: Optional[bool] = False
     draft_file_path: Optional[str] = None
+
+
+# ── Interactive Research Session ─────────────────────────────────────────────
+class TitleOption(BaseModel):
+    title: str
+    focused_topic: str
+    description: str
+    research_questions: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    article_type: str = "literature_review"
+
+class TitleOptionsOutput(BaseModel):
+    options: list[TitleOption]
+
+class ResearchSession(BaseModel):
+    research_id: str
+    created_at: str
+    status: str = "generating_titles"
+    step: int = 1
+    tema: str
+    bahasa: Literal["id", "en"] = "id"
+    document_type: str = "artikel"
+    structure_preset: str = "imrad"
+    uploaded_doc_text: Optional[str] = None
+    title_options: Optional[list[TitleOption]] = None
+    selected_title_index: Optional[int] = None
+    pipeline_id: Optional[str] = None
+    user_id: Optional[str] = None
+    error: Optional[str] = None

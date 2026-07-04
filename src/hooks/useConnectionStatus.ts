@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { BACKEND_URL } from "@/context/AuthContext";
+import { API_URL } from "@/context/AuthContext";
 
 export type ConnectionStatus = "connected" | "offline" | "backend_down";
 
@@ -22,7 +22,7 @@ export function useConnectionStatus(pollInterval = 15000) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
-      const resp = await fetch(`${BACKEND_URL}/`, {
+      const resp = await fetch(`${API_URL}/`, {
         method: "GET",
         signal: controller.signal,
         cache: "no-store",

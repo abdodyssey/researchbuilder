@@ -188,6 +188,8 @@ def run_pipeline(
             if state.stages["draft_adaptation"].status != "done":
                 console.print("\n[cyan][Draft Review] Menganalisis kesesuaian draf dengan template...[/]")
                 try:
+                    state.background_status = "Menganalisis kesesuaian draf dengan template..."
+                    save_state(state, output_dir)
                     full_draft = "\n\n".join(
                         f"## {sec['title']}\n{sec['content']}" for sec in w_output["sections"]
                     )
@@ -224,6 +226,8 @@ def run_pipeline(
                 # Adapt
                 console.print("\n[cyan][Draft Review] Menyesuaikan draf ke template jurnal...[/]")
                 try:
+                    state.background_status = "Menyunting dan memformat naskah sesuai template target..."
+                    save_state(state, output_dir)
                     adapted = a8.run(
                         draft_sections=w_output["sections"],
                         constraints=state.journal_constraints,
@@ -244,6 +248,8 @@ def run_pipeline(
                 # Final review on adapted sections
                 console.print("\n[cyan][Draft Review] Melakukan review akhir pada draf yang sudah disesuaikan...[/]")
                 try:
+                    state.background_status = "Melakukan review kualitas akhir hasil suntingan..."
+                    save_state(state, output_dir)
                     full_draft_adapted = "\n\n".join(
                         f"## {sec['title']}\n{sec['content']}" for sec in adapted
                     )
@@ -296,6 +302,8 @@ def run_pipeline(
     if state.stages["topic_narrowing"].status != "done":
         console.print("\n[cyan][1/6] Topic Narrowing...[/]")
         try:
+            state.background_status = "Memformulasikan topik riset & pertanyaan penelitian..."
+            save_state(state, output_dir)
             out = a1.run(
                 TopicNarrowingInput(tema_umum=tema, bahasa=bahasa),
                 template_text=template_text,
@@ -314,6 +322,8 @@ def run_pipeline(
     if state.stages["literature_search"].status != "done":
         console.print("\n[cyan][2/6] Literature Search...[/]")
         try:
+            state.background_status = "Melakukan pencarian literatur akademis di Tavily..."
+            save_state(state, output_dir)
             out = a2.run(
                 LiteratureSearchInput(
                     focused_topic=t["focused_topic"],
@@ -338,6 +348,8 @@ def run_pipeline(
         try:
             from schemas.agent_schemas import Reference
 
+            state.background_status = "Melakukan sintesis pustaka & pemetaan novelty..."
+            save_state(state, output_dir)
             refs = [Reference(**r) for r in l["references"]]
             out = a3.run(
                 SynthesisInput(
@@ -362,15 +374,39 @@ def run_pipeline(
     if state.stages["outline"].status != "done":
         console.print("\n[cyan][4/6] Outline...[/]")
         try:
+            from schemas.agent_schemas import Reference
+            refs = [Reference(**r) for r in l["references"]]
+            state.background_status = "Menyusun kerangka naskah dokumen..."
+            save_state(state, output_dir)
+            # Map key_themes and research_gaps to list of strings for OutlineInput
+            key_themes_str = []
+            for theme in s.get("key_themes", []):
+                if isinstance(theme, dict):
+                    key_themes_str.append(f"{theme.get('theme_name', '')}: {theme.get('synthesis', '')}")
+                elif hasattr(theme, "theme_name"):
+                    key_themes_str.append(f"{theme.theme_name}: {theme.synthesis}")
+                else:
+                    key_themes_str.append(str(theme))
+            
+            research_gaps_str = []
+            for gap in s.get("research_gaps", []):
+                if isinstance(gap, dict):
+                    research_gaps_str.append(f"Gap: {gap.get('gap_description', '')} | Solusi: {gap.get('how_we_address_it', '')}")
+                elif hasattr(gap, "gap_description"):
+                    research_gaps_str.append(f"Gap: {gap.gap_description} | Solusi: {gap.how_we_address_it}")
+                else:
+                    research_gaps_str.append(str(gap))
+
             out = a4.run(
                 OutlineInput(
                     focused_topic=t["focused_topic"],
                     article_type=t["article_type"],
                     research_questions=t["research_questions"],
                     synthesis_summary=s["synthesis_summary"],
-                    key_themes=s["key_themes"],
-                    research_gaps=s["research_gaps"],
+                    key_themes=key_themes_str,
+                    research_gaps=research_gaps_str,
                     bahasa=bahasa,
+                    references=refs,
                 ),
                 template_text=template_text,
                 constraints=state.journal_constraints,
@@ -391,7 +427,7 @@ def run_pipeline(
     if state.stages["writing"].status != "done":
         console.print("\n[cyan][5/6] Writing sections...[/]")
         try:
-            from schemas.agent_schemas import Reference, Section
+            from schemas.agent_schemas import Reference, Section, WritingContext, WritingSectionOutput
 
             sections = [Section(**sec) for sec in o["sections"]]
             refs = [Reference(**r) for r in l["references"]]
@@ -402,12 +438,38 @@ def run_pipeline(
                 positioning_statement=s["positioning_statement"],
                 bahasa=bahasa,
             )
-            out = a5.run(sections, context, refs, template_text=template_text, constraints=state.journal_constraints)
-            state = mark_stage(state, "writing", "done", out.model_dump())
+            
+            w_output = state.stages["writing"].output or {}
+            written_sections = w_output.get("sections", [])
+            written_ids = {s["section_id"] for s in written_sections}
+            
+            state.stages["writing"].status = "running"
             save_state(state, output_dir)
-            total_words = sum(sec.word_count for sec in out.sections)
+
+            for idx, section in enumerate(sections):
+                if section.id in written_ids:
+                    continue
+
+                state.background_status = f"Menulis bab {idx+1}/{len(sections)}: {section.title}"
+                save_state(state, output_dir)
+
+                inp_sec = a5.WritingInput(
+                    section=section,
+                    context=context,
+                    references_detail=refs,
+                )
+                result = a5.write_section(inp_sec, template_text, constraints=state.journal_constraints)
+                written_sections.append(result.model_dump())
+                
+                # Save progress incrementally
+                state.stages["writing"].output = {"sections": written_sections}
+                save_state(state, output_dir)
+
+            state = mark_stage(state, "writing", "done", {"sections": written_sections})
+            save_state(state, output_dir)
+            total_words = sum(sec["word_count"] for sec in written_sections)
             console.print(
-                f"  v Written {len(out.sections)} sections, ~{total_words} words"
+                f"  v Written {len(written_sections)} sections, ~{total_words} words"
             )
         except Exception as e:
             state = mark_stage(state, "writing", "failed", error=str(e))
@@ -433,6 +495,8 @@ def run_pipeline(
         try:
             from schemas.agent_schemas import Reference
 
+            state.background_status = "Melakukan peer-review kualitas draf naskah..."
+            save_state(state, output_dir)
             refs = [Reference(**r) for r in l["references"]]
 
             # Initial full draft
@@ -540,33 +604,40 @@ def run_pipeline(
             history_dir / f"references_{state.pipeline_id}.md",
         )
 
-        # Export to DOCX and copy
-        from utils.docx_exporter import export_to_docx
+        # Export to DOCX using deterministic template injector
+        from utils.docx_injector import inject_into_template, structured_doc_from_pipeline
+        from utils.citation_formatter import format_citations_in_text, format_bibliography
 
-        article_data = {
-            "judul_artikel": o.get("title", ""),
-            "nama_penulis": "[Nama Penulis]",
-            "afiliasi": "[Afiliasi Penulis]",
-            "email_korespondensi": "[Email Penulis]",
-            "abstrak": r.get("abstract", ""),
-            "kata_kunci": ", ".join(r.get("keywords_final", [])),
-            "daftar_bab": [
+        # Format bibliography for references
+        formatted_refs = format_bibliography(refs_list, state.citation_style)
+
+        structured_doc = structured_doc_from_pipeline(
+            title=o.get("title", ""),
+            abstract=r.get("abstract", ""),
+            keywords=r.get("keywords_final", []),
+            sections=[
                 {
-                    "judul_bab": sec.get("title", ""),
-                    "isi_bab": sec.get("content", "")
+                    "heading": sec.get("title", ""),
+                    "paragraphs": [
+                        format_citations_in_text(
+                            sec.get("content", ""), refs_list, state.citation_style
+                        )
+                    ],
                 }
                 for sec in w["sections"]
             ],
-            "daftar_referensi": [
-                {"teks_sitasi": f"[{ref['id']}] {ref.get('author', 'Anonim')} ({ref.get('year', 'n.d.')}). {ref.get('title', '')}. {ref.get('url', '')}"}
-                for ref in refs_list
-            ],
-        }
+            references_formatted=[{"teks_sitasi": line.lstrip("- ")} for line in formatted_refs],
+        )
 
         docx_path = Path(output_dir) / "draft_article.docx"
-        export_to_docx(
-            article_data, template_path=state.template_path, output_path=str(docx_path), md_path=str(article_path)
+        result_path, export_warnings = inject_into_template(
+            structured_doc=structured_doc,
+            template_path=state.template_path,
+            output_path=str(docx_path),
         )
+        if export_warnings:
+            for w_msg in export_warnings:
+                console.print(f"  [yellow]Warning (export): {w_msg}[/]")
         state = mark_stage(state, "docx_export", "completed")
 
         shutil.copy(

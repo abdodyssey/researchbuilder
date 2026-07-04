@@ -33,13 +33,19 @@ def normalize_title(title: str) -> str:
 
 
 def search(query: str, max_results: int = 5) -> list[dict]:
-    resp = get_client().search(query=query, max_results=max_results)
+    resp = get_client().search(
+        query=query, 
+        max_results=max_results,
+        search_depth="advanced",
+        include_raw_content=True
+    )
     results = []
     for r in resp.get("results", []):
         results.append({
             "title": r.get("title", ""),
             "url": r.get("url", ""),
             "snippet": r.get("content", ""),
+            "raw_content": r.get("raw_content", ""),
         })
     return results
 

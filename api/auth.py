@@ -11,7 +11,11 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
-SECRET_KEY = os.getenv("SECRET_KEY", "changeme-in-production-use-random-string")
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+if not SECRET_KEY:
+    import warnings
+    warnings.warn("SECRET_KEY not set — using insecure default. Set SECRET_KEY env var in production!", stacklevel=2)
+    SECRET_KEY = "dev-only-insecure-default-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 hari
 

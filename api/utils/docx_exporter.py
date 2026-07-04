@@ -8,12 +8,21 @@ def build_bab_richtext(isi_bab: str) -> RichText:
     menjadi RichText docxtpl, supaya tiap paragraf AI benar-benar jadi
     paragraf baru di Word (bukan newline mentah yang di-collapse).
     """
+    import re
     rt = RichText()
     paragraphs = [p.strip() for p in isi_bab.split("\n\n") if p.strip()]
     for i, para in enumerate(paragraphs):
         if i > 0:
             rt.add("\n")  # docxtpl RichText newline -> line break asli di Word
-        rt.add(para)
+            
+        tokens = re.split(r'(\*\*.*?\*\*|\*.*?\*)', para)
+        for token in tokens:
+            if token.startswith("**") and token.endswith("**"):
+                rt.add(token[2:-2], bold=True)
+            elif token.startswith("*") and token.endswith("*") and len(token) > 2:
+                rt.add(token[1:-1], italic=True)
+            else:
+                rt.add(token)
     return rt
 
 

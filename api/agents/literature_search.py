@@ -31,9 +31,11 @@ def run(inp: LiteratureSearchInput) -> LiteratureSearchOutput:
 
     results_text = ""
     for i, r in enumerate(raw_results):
-        results_text += f"Index: {i}\nTitle: {r['title']}\nSnippet: {r['snippet'][:250]}\nURL: {r['url']}\n\n"
+        content_val = r.get("raw_content") or r.get("snippet", "")
+        content_preview = content_val[:3000]
+        results_text += f"Index: {i}\nTitle: {r['title']}\nContent Preview: {content_preview}\nURL: {r['url']}\n\n"
 
-    results_text = truncate_to_tokens(results_text, 1500)
+    results_text = truncate_to_tokens(results_text, 6000)
 
     user_msg = f"""
 Focused topic: "{inp.focused_topic}"
@@ -43,6 +45,7 @@ Hasil pencarian web:
 {results_text}
 
 Pilih maksimal {inp.max_references} hasil paling relevan. Untuk setiap hasil yang dipilih, tentukan index pencarian, relevance_score (0.0-1.0), source_type, author, dan year.
+Pastikan Anda mengekstrak `author` dan `year` dari teks konten secara akurat. Jangan gunakan "Anonim" kecuali benar-benar tidak ditemukan nama penulis atau institusi di dalam teks tersebut.
 
 PENTING UNTUK VALIDASI JSON:
 1. Pastikan output HANYA berupa JSON valid sesuai dengan struktur di bawah. Jangan sertakan teks penjelasan sebelum atau sesudahnya.
@@ -96,6 +99,7 @@ Return JSON dengan format persis seperti ini:
                     title=orig.get("title", "Judul tidak ditemukan"),
                     url=orig.get("url", ""),
                     snippet=orig.get("snippet", ""),
+                    raw_content=orig.get("raw_content", ""),
                     relevance_score=float(item.get("relevance_score", 0.0) or 0.0),
                     source_type=item.get("source_type", "web"),
                     author=item.get("author", "Anonim"),
