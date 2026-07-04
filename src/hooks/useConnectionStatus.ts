@@ -26,6 +26,9 @@ export function useConnectionStatus(pollInterval = 15000) {
         method: "GET",
         signal: controller.signal,
         cache: "no-store",
+        headers: {
+          "ngrok-skip-browser-warning": "true",
+        },
       });
       clearTimeout(timeout);
 

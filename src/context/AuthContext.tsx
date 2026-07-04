@@ -54,6 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await fetch(`${API_URL}/api/auth/me`, {
         headers: {
           Authorization: `Bearer ${authToken}`,
+          "ngrok-skip-browser-warning": "true",
         },
       });
 
@@ -76,7 +77,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       response = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true"
+        },
         body: JSON.stringify({ email, password }),
       });
     } catch {
@@ -105,7 +109,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       response = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true"
+        },
         body: JSON.stringify({ email, password, full_name: fullName }),
       });
     } catch {
@@ -153,6 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     options.headers = {
       ...options.headers,
       Authorization: `Bearer ${currentToken}`,
+      "ngrok-skip-browser-warning": "true",
     };
 
     const url = path.startsWith("http") ? path : `${API_URL}${path}`;

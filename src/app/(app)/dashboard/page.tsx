@@ -112,7 +112,8 @@ export default function Dashboard() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Authorization": `Bearer ${token}`,
+          "ngrok-skip-browser-warning": "true"
         },
         body: JSON.stringify({
           raw_text: rawText,
@@ -136,7 +137,8 @@ export default function Dashboard() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Authorization": `Bearer ${token}`,
+          "ngrok-skip-browser-warning": "true"
         },
         body: JSON.stringify({
           structured_doc: extractData.structured_doc,
