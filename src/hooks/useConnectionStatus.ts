@@ -26,19 +26,14 @@ export function useConnectionStatus(pollInterval = 15000) {
         method: "GET",
         signal: controller.signal,
         cache: "no-store",
-        headers: {
-          "ngrok-skip-browser-warning": "true",
-        },
+        mode: "no-cors" // no-cors prevents CORS preflight issues
       });
       clearTimeout(timeout);
 
-      if (resp.ok) {
-        consecutiveFailsRef.current = 0;
-        setIsBackendUp(true);
-      } else {
-        consecutiveFailsRef.current++;
-        if (consecutiveFailsRef.current >= 2) setIsBackendUp(false);
-      }
+      // With mode: "no-cors", if the server is reachable, the fetch succeeds (status 0).
+      // If it is down, it throws a network error which goes to the catch block.
+      consecutiveFailsRef.current = 0;
+      setIsBackendUp(true);
     } catch {
       consecutiveFailsRef.current++;
       if (consecutiveFailsRef.current >= 2) setIsBackendUp(false);
