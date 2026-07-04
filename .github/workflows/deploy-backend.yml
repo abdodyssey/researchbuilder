@@ -7,6 +7,7 @@ on:
       - 'api/**'
       - 'pyproject.toml'
       - 'uv.lock'
+  workflow_dispatch:
 
 concurrency:
   group: deploy-backend
