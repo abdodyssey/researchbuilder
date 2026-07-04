@@ -1,0 +1,36 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            cd ~/researchbuilder
+            git pull origin main
+            .venv/bin/uv sync
+            pkill -f "uvicorn api.index" || true
+            sleep 2
+            cd ~/researchbuilder && nohup .venv/bin/uvicorn api.index:app --host 0.0.0.0 --port 9123 >> uvicorn.log 2>&1 &
+            sleep 3
+            curl -sf http://localhost:9123/ || exit 1
