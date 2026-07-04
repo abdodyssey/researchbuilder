@@ -1,3 +1,22 @@
+"""
+Agent 4: Outline Generator — Membuat Kerangka Artikel
+======================================================
+Membuat outline (kerangka) artikel ilmiah berdasarkan:
+- Topik terfokus dari Agent 1
+- Sintesis literatur dari Agent 3
+- Template jurnal target (opsional)
+- Constraints format jurnal (opsional, dari template_parser)
+
+Output: JSON dengan title, abstract_hint, dan list sections
+(masing-masing section berisi id, title, purpose, key_points, word_target, references_to_cite).
+
+Fitur:
+- Referensi suggestion: setiap section mendapat rekomendasi ref_xxx yang relevan
+- Template-aware: jika ada template, outline menyesuaikan struktur jurnal target
+- Constraints-aware: mengikuti required_sections, bahasa, tabel/gambar dari JournalConstraints
+- Retry otomatis (tenacity): max 2 attempt jika LLM gagal
+"""
+
 import json
 from tenacity import retry, stop_after_attempt, wait_fixed
 from schemas.agent_schemas import OutlineInput, OutlineOutput
@@ -8,6 +27,18 @@ SYSTEM = build_system_prompt("academic writing specialist creating article outli
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
 def run(inp: OutlineInput, template_text: str = "", constraints=None) -> OutlineOutput:
+    """
+    Generate outline artikel.
+
+    Args:
+        inp: OutlineInput berisi focused_topic, article_type, research_questions,
+             key_themes, research_gaps, synthesis_summary, references
+        template_text: Teks template jurnal target (opsional, dari file DOCX)
+        constraints: JournalConstraints dari template_parser (opsional)
+
+    Returns:
+        OutlineOutput: title, abstract_hint, sections[], estimated_total_words
+    """
     template_instruction = ""
     if template_text:
         template_instruction = f"\n\nTEMPLATE & STRUKTUR OUTLINE JURNAL TARGET:\n{template_text}\nSesuaikan judul, jumlah section, pembagian bab, dan urutan outline dengan format template target di atas."

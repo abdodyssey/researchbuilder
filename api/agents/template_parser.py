@@ -1,3 +1,24 @@
+"""
+Template Parser — Ekstrak Constraints dari Template Jurnal
+============================================================
+Membaca teks template jurnal target (dari file DOCX yang diupload user)
+dan mengekstrak aturan-aturan penulisan (JournalConstraints).
+
+Constraints yang diekstrak:
+- abstract_max_words: batas kata abstrak (default 250)
+- abstract_format: format abstrak (e.g. "satu paragraf tanpa sitasi")
+- keywords_min / keywords_max: range jumlah kata kunci
+- citation_style: gaya sitasi (APA/IEEE/Harvard/Chicago)
+- required_sections: list section wajib di jurnal target
+- needs_tables / needs_figures: apakah butuh tabel/gambar
+- font / font_size / columns: formatting
+- language: bahasa utama ("id" / "en")
+- additional_notes: catatan tambahan
+
+Digunakan oleh orchestrator untuk menginstruksikan agent selanjutnya
+(outline, writing, draft_adapter, review) agar mengikuti format jurnal.
+"""
+
 from tenacity import retry, stop_after_attempt, wait_fixed
 from schemas.agent_schemas import JournalConstraints
 from utils.prompt_builder import build_system_prompt
@@ -7,6 +28,15 @@ SYSTEM = build_system_prompt("academic target journal template constraints parse
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
 def run(template_text: str) -> JournalConstraints:
+    """
+    Parse template jurnal dan kembalikan JournalConstraints.
+
+    Args:
+        template_text: Teks lengkap template jurnal (biasanya dari DOCX)
+
+    Returns:
+        JournalConstraints: objek Pydantic berisi semua aturan format jurnal
+    """
     user_msg = f"""
 Kamu adalah parser template jurnal akademik.
 Baca teks template jurnal berikut dan ekstrak constraints penulisan.

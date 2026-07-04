@@ -1,3 +1,17 @@
+"""
+State Manager — Persistensi Pipeline State
+=============================================
+Mengelola lifecycle state pipeline: create, save, load, mark_stage.
+
+Setiap pipeline run disimpan sebagai file JSON individual:
+  output/runs/pipeline_state_{pipeline_id}.json
+
+Fitur:
+- Setiap save otomatis meng-attach token usage terbaru dari llm_client
+- Support resume: jika pipeline gagal, state terakhir bisa di-load dan dilanjutkan
+- Stage tracking: setiap stage punya status (pending/running/done/failed) + output dict
+"""
+
 import json
 import uuid
 from datetime import datetime, timezone
@@ -18,6 +32,10 @@ def create_pipeline(
     draft_file_path: str = None,
     document_type: str = "artikel"
 ) -> PipelineState:
+    """
+    Buat PipelineState baru dengan UUID unik.
+    Ini adalah titik awal setiap pipeline run (baik batch maupun interactive).
+    """
     return PipelineState(
         pipeline_id=str(uuid.uuid4()),
         created_at=datetime.now(timezone.utc).isoformat(),
@@ -31,6 +49,11 @@ def create_pipeline(
 
 
 def save_state(state: PipelineState, output_dir: str = "./output") -> None:
+    """
+    Simpan pipeline state ke file JSON di output/runs/.
+    Otomatis attach token usage terbaru dari in-memory store.
+    Dipanggil setelah setiap perubahan state (stage complete, error, dll).
+    """
     try:
         from utils.llm_client import get_usage
         usage = get_usage(state.pipeline_id)
@@ -47,6 +70,11 @@ def save_state(state: PipelineState, output_dir: str = "./output") -> None:
 
 
 def load_state(output_dir: str = "./output", pipeline_id: str = None) -> PipelineState | None:
+    """
+    Load pipeline state dari file JSON.
+    Jika pipeline_id diberikan, load file spesifik; jika tidak, load default state file.
+    Return None jika file tidak ditemukan.
+    """
     if pipeline_id:
         path = Path(output_dir) / "runs" / f"pipeline_state_{pipeline_id}.json"
     else:
@@ -59,6 +87,10 @@ def load_state(output_dir: str = "./output", pipeline_id: str = None) -> Pipelin
 
 def mark_stage(state: PipelineState, stage: str, status: str,
                output: dict = None, error: str = None) -> PipelineState:
+    """
+    Update status sebuah stage dalam pipeline.
+    Jika status = "failed", otomatis set pipeline status ke "failed" juga.
+    """
     state.stages[stage] = StageState(status=status, output=output, error=error)
     if status == "failed":
         state.status = "failed"

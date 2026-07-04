@@ -1,3 +1,19 @@
+"""
+File Writer — Export Artikel ke Markdown
+==========================================
+Menulis hasil pipeline (artikel + referensi) ke file .md di disk.
+
+Dua output file:
+- draft_article.md: Artikel lengkap (frontmatter YAML, abstrak, sections, daftar pustaka)
+- references.md:    Daftar referensi terpisah (detail per referensi)
+
+Fitur:
+- Citation formatting sesuai style (APA/IEEE/Harvard/Chicago)
+- Bilingual abstract support (Abstrak ID + Abstract EN)
+- Otomatis skip section "Daftar Pustaka" dari content (dirender terpisah di akhir)
+- Warning sitasi hallucinated (ID referensi yang tidak valid)
+"""
+
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -13,6 +29,16 @@ def write_article(
     models_used: list[str],
     citation_style: str = "default",
 ) -> str:
+    """
+    Tulis artikel lengkap ke draft_article.md.
+
+    Flow:
+    1. Buat YAML frontmatter (title, keywords, score, models, timestamp)
+    2. Render abstrak bilingual (Abstrak ID + Abstract EN jika ada)
+    3. Render setiap section (skip yang sudah jadi abstrak/daftar pustaka)
+    4. Render daftar pustaka terformat
+    5. Jalankan citation checker → tambah warning jika ada sitasi hallucinated
+    """
     path = Path(output_dir) / "draft_article.md"
     now = datetime.now(timezone.utc).isoformat()
 
@@ -103,6 +129,7 @@ def write_article(
 
 
 def write_references(output_dir: str, references: list[dict], citation_style: str = "default") -> str:
+    """Tulis file references.md terpisah dengan detail setiap referensi."""
     path = Path(output_dir) / "references.md"
     lines = ["# References", ""]
     for idx, r in enumerate(references):

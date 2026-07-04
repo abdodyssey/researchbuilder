@@ -135,4 +135,5 @@ def extract_document_structure(raw_text: str) -> dict:
     }
 
 def _normalize_extraction_output(data: dict) -> dict:
-    pass # Digantikan langsung oleh logic di atas
+    """[Deprecated] Normalisasi sudah dilakukan inline di extract_document_structure()."""
+    pass

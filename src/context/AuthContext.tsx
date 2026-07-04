@@ -7,11 +7,9 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
-  plan: "trial" | "basic" | "premium";
+  tokens_balance: number;
   tokens_used: number;
-  tokens_total: number;
-  tokens_remaining: number;
-  trial_expired: boolean;
+  tokens_purchased: number;
 }
 
 interface AuthContextType {

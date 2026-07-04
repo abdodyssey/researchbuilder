@@ -1,3 +1,20 @@
+"""
+LLM Client — Wrapper untuk Groq API
+======================================
+Abstraksi untuk semua panggilan ke LLM (Groq Cloud).
+
+Fitur:
+- Auto-fallback: Jika model utama (llama-3.3-70b) rate limited atau error,
+  otomatis fallback ke model kecil (llama-3.1-8b-instant)
+- Token tracking: Setiap panggilan dicatat per-agent per-pipeline (thread-safe)
+- JSON extraction: Robust parser yang bisa handle malformed LLM output
+  (markdown wrappers, unescaped newlines, truncated JSON dari max_tokens)
+- Lazy init: Client hanya diinisialisasi saat pertama kali dipanggil
+  (supaya import di Vercel tidak crash tanpa API key)
+
+Model default: GROQ_MODEL env var (default: llama-3.3-70b-versatile)
+"""
+
 import json
 import os
 import re
@@ -9,31 +26,44 @@ from groq import Groq
 
 load_dotenv()
 
+# Lazy-initialized Groq client (singleton pattern)
 _client = None
 
 def get_client():
+    """Inisialisasi Groq client hanya saat pertama dipanggil (lazy init)."""
     global _client
     if _client is None:
         api_key = os.getenv("GROQ_API_KEY", "missing_api_key_on_vercel")
         _client = Groq(api_key=api_key)
     return _client
 
+# Thread-local storage untuk pipeline_id aktif dan model saat ini.
+# Diperlukan karena background tasks berjalan di thread berbeda.
 _thread_local = threading.local()
+
+# In-memory store untuk token usage per pipeline.
+# Dibatasi _MAX_USAGE_ENTRIES agar tidak membengkak di long-running server.
 _usage_store: dict = {}
 _usage_store_lock = threading.Lock()
 _MAX_USAGE_ENTRIES = 200
 
 
 def set_active_pipeline_id(pipeline_id: str):
+    """Set pipeline_id untuk thread saat ini. Digunakan untuk token tracking otomatis."""
     _thread_local.active_pipeline_id = pipeline_id
 
 def _get_active_pipeline_id() -> str:
+    """Ambil pipeline_id thread saat ini (kosong jika belum di-set)."""
     return getattr(_thread_local, "active_pipeline_id", "")
 
 
 def call_llm_with_usage(
     message: list, temperature: float = 0.3, max_tokens: int = 1000
 ) -> tuple[str, dict]:
+    """
+    Panggil LLM dan kembalikan (response_text, usage_dict).
+    Versi lama — gunakan call_llm() untuk kode baru (tracking otomatis).
+    """
     model = get_current_model()
     fallback_model = "llama-3.1-8b-instant"
 
@@ -63,10 +93,12 @@ def call_llm_with_usage(
 
 
 def record_usage(pipeline_id: str, agent: str, usage: dict):
+    """Public API untuk mencatat usage secara manual (deprecated, pakai call_llm)."""
     track_usage(pipeline_id, agent, usage)
 
 
 def _record_resp_usage(agent: str, resp):
+    """Internal: catat usage dari response Groq ke store berdasarkan active pipeline."""
     pid = _get_active_pipeline_id()
     if pid and agent:
         usage_dict = {
@@ -78,6 +110,10 @@ def _record_resp_usage(agent: str, resp):
 
 
 def get_usage(pipeline_id: str) -> dict:
+    """
+    Ambil data token usage untuk sebuah pipeline.
+    Cek in-memory store dulu, fallback ke file state di disk.
+    """
     if pipeline_id in _usage_store:
         return _usage_store[pipeline_id]
     try:
@@ -93,6 +129,7 @@ def get_usage(pipeline_id: str) -> dict:
 
 
 def get_current_model() -> str:
+    """Ambil model LLM aktif di thread ini (default dari env GROQ_MODEL)."""
     model = getattr(_thread_local, "current_model", None)
     if model is None:
         model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
@@ -101,10 +138,15 @@ def get_current_model() -> str:
 
 
 def set_current_model(model_name: str):
+    """Override model LLM untuk thread ini (biasanya untuk fallback)."""
     _thread_local.current_model = model_name
 
 
 def track_usage(pipeline_id: str, agent: str, usage: dict):
+    """
+    Thread-safe: akumulasi token usage per agent per pipeline.
+    Otomatis hitung total kumulatif. Dibatasi _MAX_USAGE_ENTRIES.
+    """
     with _usage_store_lock:
         if len(_usage_store) > _MAX_USAGE_ENTRIES:
             oldest = next(iter(_usage_store))
@@ -128,6 +170,23 @@ def track_usage(pipeline_id: str, agent: str, usage: dict):
 def call_llm(
     messages: list, temperature: float = 0.3, max_tokens: int = 1000, agent: str = ""
 ) -> str:
+    """
+    Fungsi utama untuk memanggil LLM (Groq).
+
+    Fitur:
+    - Retry 2x jika rate limited (sleep 2s between)
+    - Auto-fallback ke model kecil (llama-3.1-8b) jika model utama gagal
+    - Token usage otomatis dicatat jika agent name diberikan
+
+    Args:
+        messages:    List chat messages [{"role": "system/user", "content": "..."}]
+        temperature: Kreativitas LLM (0.0-1.0, rendah = deterministik)
+        max_tokens:  Batas maksimal token output
+        agent:       Nama agent pemanggil (untuk token tracking)
+
+    Returns:
+        String response dari LLM
+    """
     import time
     model = get_current_model()
     fallback_model = "llama-3.1-8b-instant"
@@ -188,8 +247,14 @@ def call_llm(
 
 def repair_json_newlines_and_quotes(text: str) -> str:
     """
-    Repair a JSON string by escaping unescaped newlines, carriage returns, 
-    tabs, and unescaped double quotes inside string values.
+    Perbaiki JSON rusak dari output LLM.
+
+    Masalah umum yang diperbaiki:
+    - Newline literal di dalam string value (\\n yang seharusnya \\\\n)
+    - Double quotes yang tidak di-escape di dalam string
+    - Carriage return dan tab yang rusak
+
+    Menggunakan state machine: track apakah kita di dalam/luar string JSON.
     """
     output = []
     in_string = False
@@ -245,6 +310,19 @@ def repair_json_newlines_and_quotes(text: str) -> str:
 
 
 def extract_json(text: str) -> dict:
+    """
+    Robust JSON extractor dari output LLM.
+
+    Strategi parsing (berurutan, berhenti di yang pertama berhasil):
+    1. json.loads langsung (ideal case)
+    2. Repair newlines/quotes → json.loads
+    3. Regex cari blok {...} di teks yang sudah di-repair
+    4. Regex cari blok {...} di teks original
+    5. Truncation repair: tutup braces/brackets yang terbuka (max_tokens cutoff)
+    6. Jika semua gagal, simpan response ke file debug & raise ValueError
+
+    Dipanggil oleh semua agent setelah menerima response dari LLM.
+    """
     text = text.strip()
     # Strip markdown code block wrappers
     text = re.sub(r"^```(?:json)?", "", text).strip()

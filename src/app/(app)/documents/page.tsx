@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useAuth, API_URL } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import {
@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Dialog } from "@/components/ui/Dialog";
+import { useApiQuery } from "@/hooks/useApiQuery";
 
 interface DocumentRun {
   pipeline_id: string;
@@ -59,19 +60,9 @@ export default function DocumentsPage() {
   const { user, token, authFetch } = useAuth();
   const router = useRouter();
 
-  const [runs, setRuns] = useState<DocumentRun[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: runs, loading, error, refetch } = useApiQuery<DocumentRun[]>("/api/runs");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    authFetch("/api/runs")
-      .then((res) => res.json())
-      .then(setRuns)
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, []);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -79,8 +70,8 @@ export default function DocumentsPage() {
     try {
       const res = await authFetch(`/api/runs/${deleteTarget}`, { method: "DELETE" });
       if (res.ok) {
-        setRuns((prev) => prev.filter((r) => r.pipeline_id !== deleteTarget));
         setDeleteTarget(null);
+        refetch();
       }
     } catch (e) {
       console.error(e);
@@ -91,8 +82,7 @@ export default function DocumentsPage() {
 
   if (!user) return null;
 
-  const tokensTotal = user.tokens_total === -1 ? null : user.tokens_total;
-  const totalDocsTokens = runs.reduce((sum, r) => sum + (r.token_usage_total || 0), 0);
+  const totalDocsTokens = (runs ?? []).reduce((sum, r) => sum + (r.token_usage_total || 0), 0);
 
   return (
     <div className="p-6 md:p-10 max-w-6xl mx-auto w-full space-y-8">
@@ -117,29 +107,21 @@ export default function DocumentsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <StatCard
             title="Total Dokumen"
-            value={runs.length}
+            value={(runs ?? []).length}
             icon={<FileText className="w-5 h-5" />}
-            description={`${runs.filter((r) => r.status === "completed").length} selesai`}
+            description={`${(runs ?? []).filter((r) => r.status === "completed").length} selesai`}
           />
           <StatCard
             title="Token Digunakan"
-            value={
-              tokensTotal === null
-                ? formatTokens(user.tokens_used)
-                : `${formatTokens(user.tokens_used)} / ${formatTokens(tokensTotal)}`
-            }
+            value={formatTokens(user.tokens_used)}
             icon={<Zap className="w-5 h-5" />}
-            description={
-              tokensTotal === null
-                ? "Unlimited"
-                : `${Math.round((user.tokens_used / tokensTotal) * 100)}% terpakai`
-            }
+            description={`Saldo: ${formatTokens(user.tokens_balance)} token`}
           />
           <StatCard
-            title="Token Tersisa"
-            value={tokensTotal === null ? "∞" : formatTokens(user.tokens_remaining)}
+            title="Saldo Token"
+            value={formatTokens(user.tokens_balance)}
             icon={<Zap className="w-5 h-5" />}
-            description={tokensTotal === null ? "Paket Unlimited" : `Dari ${formatTokens(tokensTotal)} total`}
+            description={`Dari ${formatTokens(user.tokens_purchased)} total dibeli`}
           />
         </div>
       )}
@@ -167,7 +149,7 @@ export default function DocumentsPage() {
             Coba Lagi
           </Button>
         </Card>
-      ) : runs.length === 0 ? (
+      ) : (runs ?? []).length === 0 ? (
         /* Empty State */
         <Card className="p-12 flex flex-col items-center justify-center text-center">
           <div className="w-20 h-20 bg-bg-main border border-border-color rounded-2xl flex items-center justify-center mb-6">
@@ -196,7 +178,7 @@ export default function DocumentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {runs.map((run, i) => {
+                  {(runs ?? []).map((run, i) => {
                     const statusInfo = STATUS_MAP[run.status] || STATUS_MAP.failed;
                     const scoreColor =
                       run.review_score === null
@@ -259,7 +241,7 @@ export default function DocumentsPage() {
 
           {/* Mobile Cards */}
           <div className="md:hidden space-y-3">
-            {runs.map((run) => {
+            {(runs ?? []).map((run) => {
               const statusInfo = STATUS_MAP[run.status] || STATUS_MAP.failed;
               return (
                 <Card key={run.pipeline_id} className="!p-4">

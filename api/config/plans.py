@@ -1,31 +1,22 @@
-from datetime import timedelta
+"""
+Token Packages — PAYG Top-Up Configuration
+=============================================
+Definisi paket token yang tersedia untuk dibeli.
+Semua fitur terbuka untuk semua user — gating hanya berdasarkan saldo token.
+"""
 
-PLANS = {
-    "trial": {
-        "tokens": 100000,
-        "max_refs": 5,
-        "template_upload": False,
-        "history_days": 7,
-        "duration_days": 30,
-    },
-    "basic": {
-        "tokens": 500000,
-        "max_refs": 10,
-        "template_upload": False,
-        "history_days": 30,
-        "duration_days": None,
-    },
-    "premium": {
-        "tokens": -1,
-        "max_refs": 15,
-        "template_upload": True,
-        "history_days": -1,
-        "duration_days": None,
-    },
+TOKEN_PACKAGES = {
+    "starter": {"tokens": 50000, "price": 25000, "label": "Starter"},
+    "standard": {"tokens": 200000, "price": 75000, "label": "Standard"},
+    "bulk": {"tokens": 500000, "price": 150000, "label": "Bulk"},
 }
 
-def get_plan(plan_name: str) -> dict:
-    return PLANS.get(plan_name, PLANS["trial"])
+FREE_TOKENS = 10000
 
-def is_unlimited(plan_name: str) -> bool:
-    return PLANS.get(plan_name, {}).get("tokens", 0) == -1
+MAX_REFS = 15
+HISTORY_DAYS = -1
+TEMPLATE_UPLOAD = True
+
+
+def get_package(key: str) -> dict | None:
+    return TOKEN_PACKAGES.get(key)

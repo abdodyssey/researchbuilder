@@ -1,3 +1,16 @@
+"""
+Agent 1: Topic Narrowing
+==========================
+Persempit tema umum dari user menjadi fokus penelitian yang spesifik.
+
+Dua fungsi utama:
+- run()                    → Untuk batch pipeline: 1 tema → 1 focused topic
+- generate_title_options() → Untuk interactive wizard: 1 tema → 3 opsi judul berbeda
+
+Output mencakup: focused_topic, research_questions, keywords, article_type, suggested_title.
+LLM diminta mengembalikan JSON yang langsung diparsing ke Pydantic model.
+"""
+
 import json
 from tenacity import retry, stop_after_attempt, wait_fixed
 from schemas.agent_schemas import TopicNarrowingInput, TopicNarrowingOutput, TitleOption, TitleOptionsOutput
@@ -8,6 +21,10 @@ SYSTEM = build_system_prompt("senior academic researcher specializing in topic s
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
 def run(inp: TopicNarrowingInput, template_text: str = "") -> TopicNarrowingOutput:
+    """
+    Batch mode: persempit 1 tema → 1 focused topic + metadata penelitian.
+    Jika template_text diberikan, LLM akan menyesuaikan angle topik dengan pedoman jurnal.
+    """
     template_instruction = ""
     if template_text:
         template_instruction = f"\n\nTEMPLATE & PEDOMAN PENULISAN TARGET:\n{template_text}\nSesuaikan fokus topik dan tipe artikel agar selaras dengan panduan penulisan di atas."
@@ -43,6 +60,7 @@ Return JSON dengan struktur:
     return TopicNarrowingOutput(**data)
 
 
+# Preset struktur artikel: digunakan di prompt agar LLM paham format target
 STRUCTURE_PRESETS = {
     "imrad": "Introduction, Methods, Results, and Discussion (IMRAD)",
     "skripsi": "Pendahuluan, Tinjauan Pustaka, Metodologi, Hasil & Pembahasan, Kesimpulan",
@@ -57,6 +75,13 @@ def generate_title_options(
     structure_preset: str = "imrad",
     uploaded_doc_context: str = "",
 ) -> TitleOptionsOutput:
+    """
+    Interactive wizard mode: berikan 3 opsi judul penelitian yang berbeda.
+    Setiap opsi punya angle/perspektif unik (misal: systematic review vs empirical vs conceptual).
+
+    Jika uploaded_doc_context ada (user upload PDF/DOCX sebagai referensi),
+    LLM akan menggunakan isi dokumen tersebut untuk menyarankan judul yang lebih relevan.
+    """
     doc_instruction = ""
     if uploaded_doc_context:
         preview = uploaded_doc_context[:8000]

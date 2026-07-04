@@ -1,3 +1,19 @@
+"""
+Agent Schemas — Pydantic Models untuk Pipeline
+=================================================
+Semua data model (input/output) yang digunakan oleh agent pipeline.
+
+Struktur:
+- Agent 1 (Topic Narrowing):   TopicNarrowingInput → TopicNarrowingOutput
+- Agent 2 (Literature Search): LiteratureSearchInput → LiteratureSearchOutput (+ Reference)
+- Agent 3 (Synthesis):         SynthesisInput → SynthesisOutput (+ KeyTheme, ResearchGap, KeyFinding)
+- Agent 4 (Outline):           OutlineInput → OutlineOutput (+ Section)
+- Agent 5 (Writing):           WritingInput → WritingSectionOutput / WritingOutput
+- Agent 6 (Review):            ReviewInput → ReviewOutput (+ ReviewIssue)
+- Pipeline:                    PipelineState (+ StageState, JournalConstraints)
+- Interactive Wizard:          ResearchSession, TitleOption, TitleOptionsOutput
+"""
+
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 

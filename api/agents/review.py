@@ -1,3 +1,21 @@
+"""
+Agent 6: Peer Reviewer — Review dan Scoring Artikel
+=====================================================
+Bertindak sebagai peer reviewer jurnal akademis:
+1. Membaca seluruh draft artikel
+2. Memberikan skor 0-100
+3. Mengidentifikasi issues (type, location, severity, suggestion)
+4. Menulis abstrak final (minimal 150 kata, struktur lengkap)
+5. Menyediakan keywords final
+
+Fitur khusus:
+- Methodology guard: mencegah LLM mengarang metode empiris
+  untuk tipe literature_review atau conceptual
+- Template-aware: menyesuaikan review dengan gaya jurnal target
+- Constraints-aware: flag jika abstrak/keywords tidak sesuai batas jurnal
+- Auto-retry (tenacity): max 2 attempt
+"""
+
 import json
 import re
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -12,6 +30,18 @@ SYSTEM = build_system_prompt("peer reviewer for academic journals")
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
 def run(inp: ReviewInput, article_type: str = "literature_review", template_text: str = "", constraints=None) -> ReviewOutput:
+    """
+    Review artikel dan hasilkan skor + abstrak final.
+
+    Args:
+        inp: ReviewInput berisi focused_topic, research_questions, full_draft
+        article_type: "literature_review" | "conceptual" | "empirical" (untuk methodology guard)
+        template_text: Teks template jurnal target (opsional)
+        constraints: JournalConstraints (opsional, untuk validasi batas kata/keywords)
+
+    Returns:
+        ReviewOutput: overall_score, issues[], abstract, keywords_final, review_summary
+    """
     draft_text = truncate_to_tokens(inp.full_draft, 1200)
     
     # Determine constraints based on article_type

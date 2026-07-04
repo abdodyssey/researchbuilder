@@ -1,3 +1,26 @@
+"""
+Agent 5.5: Draft Adapter — Adaptasi Draft ke Format Jurnal Target
+===================================================================
+Mengadaptasi setiap section artikel agar sesuai dengan panduan format
+jurnal target (JournalConstraints dari template_parser).
+
+Dijalankan SETELAH Agent 5 (Writing) dan SEBELUM Agent 6 (Review).
+Hanya aktif jika user mengupload template jurnal target.
+
+Prinsip utama:
+- PERTAHANKAN semua konten asli (tidak boleh mengurangi/meringkas)
+- PERTAHANKAN semua sitasi yang sudah ada
+- Yang berubah: gaya bahasa (lebih akademis), struktur paragraf, judul section
+- Jika ada isu dari reviewer (pass kedua), perbaiki section yang bermasalah
+- Section yang tidak ada di template tapi required → ditambah sebagai placeholder
+
+Fitur:
+- Per-section adaptation: setiap section diadaptasi satu per satu ke LLM
+- Missing section detection: cek required_sections vs existing sections (fuzzy match)
+- Section name mapping: mengenali sinonim antar bahasa (e.g. "Pendahuluan" = "Introduction")
+- Fallback: jika LLM gagal adapt satu section, gunakan konten asli
+"""
+
 from tenacity import retry, stop_after_attempt, wait_fixed
 from schemas.agent_schemas import JournalConstraints
 from utils.prompt_builder import build_system_prompt
@@ -17,6 +40,10 @@ def _adapt_section(
     all_sections_overview: str,
     section_issues: list[str] = None,
 ) -> dict:
+    """
+    Adaptasi satu section ke format jurnal target.
+    Dipanggil oleh run() untuk setiap section secara berurutan.
+    """
     content = section.get("content", "")
     word_count = len(content.split())
 
@@ -95,6 +122,25 @@ def run(
     tema: str,
     issues: list[dict] = None,
 ) -> list[dict]:
+    """
+    Adaptasi seluruh draft ke format jurnal target.
+
+    Flow:
+    1. Iterasi setiap section → panggil _adapt_section()
+    2. Filter isu reviewer yang relevan per section (by title matching)
+    3. Jika adapt gagal (exception), fallback ke konten asli
+    4. Cek missing sections: jika required_section tidak ada di draft → tambah placeholder
+
+    Args:
+        draft_sections: List section dari Agent 5 (Writing)
+        constraints: JournalConstraints dari template_parser
+        bahasa: "id" atau "en"
+        tema: Topik artikel (untuk konteks LLM)
+        issues: Isu dari reviewer (opsional, untuk pass revisi kedua)
+
+    Returns:
+        List section yang sudah diadaptasi
+    """
     required_sections = constraints.required_sections or []
 
     all_titles = [sec.get("title", "Untitled") for sec in draft_sections]

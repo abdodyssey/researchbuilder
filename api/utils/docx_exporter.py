@@ -1,4 +1,30 @@
+"""
+DOCX Exporter — Export Artikel ke Format Word (.docx)
+======================================================
+Mengkonversi hasil pipeline (structured article data atau markdown)
+menjadi file .docx yang siap download.
+
+Dua mode export:
+1. Template-based (DocxTemplate + Jinja2):
+   - Gunakan template .docx user yang sudah punya tag {{ judul_artikel }}, {{ abstrak }}, dll
+   - DocxTemplate render otomatis → output rapi sesuai format jurnal user
+
+2. Fallback (python-docx langsung):
+   - Jika template tidak punya tag Jinja → parse markdown → inject per-paragraf
+   - Tetap gunakan template sebagai "shell" (header, footer, font, margin)
+   - Konten di-append setelah section kata kunci
+
+Helper functions:
+- build_bab_richtext(): Konversi paragraf markdown → RichText docxtpl (bold/italic)
+- extract_template_text(): Ambil teks dari .docx untuk analisis template
+- export_to_docx(): Entry point utama, pilih mode template/fallback
+- export_markdown_to_docx_fallback(): Fallback mode (parse .md → .docx)
+- _add_formatted_text(): Helper untuk render bold/italic di python-docx
+"""
+
 import re
+from pathlib import Path
+import docx
 from docxtpl import DocxTemplate, RichText
 
 
@@ -8,7 +34,6 @@ def build_bab_richtext(isi_bab: str) -> RichText:
     menjadi RichText docxtpl, supaya tiap paragraf AI benar-benar jadi
     paragraf baru di Word (bukan newline mentah yang di-collapse).
     """
-    import re
     rt = RichText()
     paragraphs = [p.strip() for p in isi_bab.split("\n\n") if p.strip()]
     for i, para in enumerate(paragraphs):
@@ -27,7 +52,7 @@ def build_bab_richtext(isi_bab: str) -> RichText:
 
 
 def extract_template_text(template_path: str) -> str:
-    import docx
+    """Ambil semua teks dari file .docx template untuk analisis (cek Jinja tags, dll)."""
     try:
         doc = docx.Document(template_path)
         return "\n".join(p.text for p in doc.paragraphs)
@@ -37,6 +62,12 @@ def extract_template_text(template_path: str) -> str:
 
 def export_to_docx(article_data: dict, template_path: str, output_path: str, md_path: str = None) -> str:
     """
+    Export artikel ke .docx.
+
+    Dua jalur:
+    1. Jika template punya tag Jinja ({{ ... }}) → render via DocxTemplate
+    2. Jika tidak → fallback ke export_markdown_to_docx_fallback (parse .md)
+
     article_data harus punya struktur:
     {
         "judul_artikel": str,
@@ -93,6 +124,17 @@ def export_to_docx(article_data: dict, template_path: str, output_path: str, md_
 
 
 def export_markdown_to_docx_fallback(md_path: str, docx_path: str, template_path: str = None) -> None:
+    """
+    Fallback export: parse markdown → inject ke .docx.
+
+    Digunakan ketika template .docx user TIDAK punya tag Jinja.
+    Flow:
+    1. Parse YAML frontmatter (title, keywords)
+    2. Jika ada template: load, replace title/abstrak/keywords di header template
+    3. Hapus body template lama (setelah keywords)
+    4. Parse setiap baris markdown → append ke dokumen (heading, list, paragraf)
+    5. Bold/italic formatting dipertahankan via _add_formatted_text()
+    """
     md_content = Path(md_path).read_text(encoding="utf-8")
     
     # 1. Parse metadata (title, abstract, keywords) from markdown frontmatter
@@ -288,6 +330,7 @@ def export_markdown_to_docx_fallback(md_path: str, docx_path: str, template_path
 
 
 def _add_formatted_text(paragraph, text: str):
+    """Render teks dengan bold (**text**) dan italic (*text*) ke paragraph Word."""
     # Split by bold and italic syntax: **bold** or *italic*
     tokens = re.split(r'(\*\*.*?\*\*|\*.*?\*)', text)
     for token in tokens:

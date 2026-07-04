@@ -1,3 +1,15 @@
+"""
+Auth Module — JWT Authentication & Authorization
+===================================================
+Menangani autentikasi dan otorisasi untuk ResearchBuilder API.
+
+Komponen:
+- Password hashing (bcrypt)
+- JWT token creation & validation (python-jose)
+- FastAPI dependencies: get_current_user, check_token_limit
+- Token balance enforcement: cek apakah user masih punya saldo
+"""
+
 import os
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -17,13 +29,12 @@ if not SECRET_KEY:
     warnings.warn("SECRET_KEY not set — using insecure default. Set SECRET_KEY env var in production!", stacklevel=2)
     SECRET_KEY = "dev-only-insecure-default-key"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 hari
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 
 
 bearer_scheme = HTTPBearer()
 
 
-# ── Password ──────────────────────────────────────────────────────────────────
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -31,7 +42,6 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
-# ── JWT ───────────────────────────────────────────────────────────────────────
 def create_access_token(user_id: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     return jwt.encode({"sub": user_id, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
@@ -44,7 +54,6 @@ def decode_token(token: str) -> Optional[str]:
         return None
 
 
-# ── Dependency ────────────────────────────────────────────────────────────────
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
@@ -75,31 +84,9 @@ def get_current_user_optional(
     return db.query(User).filter(User.id == user_id).first()
 
 
-# ── Token Check ──────────────────────────────────────────────────────────────
 def check_token_limit(user: User, db: Session) -> None:
-    from config.plans import get_plan
-    from datetime import datetime, timezone
-
-    # Cek trial expired
-    if user.plan == "trial" and user.is_trial_expired():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Trial 30 hari Anda telah habis. Silakan upgrade ke Basic atau Premium."
-        )
-
-    plan = get_plan(user.plan)
-    tokens = plan["tokens"]
-
-    # Reset bulanan
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if user.tokens_reset_at and (now - user.tokens_reset_at).days >= 30:
-        user.tokens_used = 0
-        user.tokens_reset_at = now
-        db.commit()
-
-    # Cek limit
-    if tokens != -1 and user.tokens_used >= tokens:
+    if user.tokens_balance <= 0:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"Token habis. Anda telah menggunakan {user.tokens_used}/{tokens} token bulan ini."
+            detail="Saldo token habis. Silakan beli token untuk melanjutkan."
         )

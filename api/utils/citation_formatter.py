@@ -1,6 +1,32 @@
+"""
+Citation Formatter — Format Sitasi Akademis
+=============================================
+Mengubah sitasi internal [ref_xxx] menjadi format standar akademis.
+
+Gaya yang didukung:
+- default: Tetap pakai [ref_xxx] (internal ID)
+- apa:     (Smith & Doe, 2023) — American Psychological Association
+- ieee:    [1, 2] — Institute of Electrical and Electronics Engineers
+- harvard: (Smith & Doe, 2023) — mirip APA tapi format bibliografi beda
+- chicago: (Smith and Doe 2023) — Chicago Manual of Style
+
+Dua fungsi utama:
+- format_citations_in_text(): Ganti [ref_xxx] di dalam paragraf
+- format_bibliography():      Buat daftar pustaka terformat
+"""
+
 import re
 
+
 def get_citation_author(author: str, use_and: bool = False) -> str:
+    """
+    Ambil nama akhir penulis untuk in-text citation.
+
+    Rules:
+    - 1 penulis: "Smith"
+    - 2 penulis: "Smith & Doe" (atau "Smith and Doe" jika use_and=True)
+    - 3+ penulis: "Smith et al."
+    """
     if not author or author.strip().lower() in ["anonim", "anonymous", ""]:
         return "Anonim"
     
@@ -44,6 +70,10 @@ def get_citation_author(author: str, use_and: bool = False) -> str:
 
 
 def format_citations_in_text(text: str, references: list[dict], style: str = "default") -> str:
+    """
+    Ganti semua [ref_xxx] di dalam teks dengan format sitasi yang dipilih.
+    Contoh: [ref_001, ref_002] → (Smith, 2023; Doe, 2024) untuk APA style.
+    """
     if style == "default":
         return text
 
@@ -95,6 +125,11 @@ def format_citations_in_text(text: str, references: list[dict], style: str = "de
 
 
 def format_bibliography(references: list[dict], style: str = "default") -> list[str]:
+    """
+    Buat daftar pustaka (bibliography) dari list referensi.
+    Setiap baris diformat sesuai gaya sitasi yang dipilih.
+    Return list of strings (satu string per referensi).
+    """
     lines = []
     
     for idx, r in enumerate(references):

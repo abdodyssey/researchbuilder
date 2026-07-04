@@ -1,3 +1,18 @@
+"""
+Agent 3: Synthesis
+====================
+Sintesis temuan dari literatur yang telah dikumpulkan.
+
+Tugas utama:
+- Identifikasi tema-tema kunci (key_themes) yang muncul lintas pustaka
+- Identifikasi celah penelitian (research_gaps) beserta rencana pengisian
+- Ekstrak temuan kunci (key_findings) dengan referensi pendukung
+- Tulis ringkasan sintesis + positioning statement
+
+Input: focused_topic + research_questions + list of Reference
+Output: SynthesisOutput (themes, gaps, findings, summary, positioning)
+"""
+
 import json
 from tenacity import retry, stop_after_attempt, wait_fixed
 from schemas.agent_schemas import SynthesisInput, SynthesisOutput
@@ -9,6 +24,10 @@ SYSTEM = build_system_prompt("academic researcher synthesizing literature findin
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
 def run(inp: SynthesisInput) -> SynthesisOutput:
+    """
+    Jalankan sintesis pustaka: identifikasi tema, gap, temuan kunci.
+    Referensi di-truncate ke 1500 token agar muat di context window LLM.
+    """
     refs_text = refs_to_text([r.model_dump() for r in inp.references])
     refs_text = truncate_to_tokens(refs_text, 1500)
 

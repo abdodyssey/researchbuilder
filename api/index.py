@@ -1,7 +1,26 @@
+"""
+ResearchBuilder — API Entry Point (FastAPI)
+============================================
+File utama yang mendefinisikan semua HTTP endpoint untuk aplikasi.
+
+Arsitektur endpoint dibagi menjadi beberapa grup:
+  1. /api/generate        → Pipeline batch (one-shot full article generation)
+  2. /api/research/*      → Interactive Research Wizard (step-by-step dengan user input)
+  3. /api/extract-doc     → Ekstraksi struktur dari teks mentah
+  4. /api/export-docx     → Export structured doc ke file DOCX
+  5. /api/auth/*          → Register, Login, Me
+  6. /api/payment/*       → Payment gateway (Mayar) + webhook
+  7. /api/runs, /api/status, /api/download → Manajemen hasil pipeline
+
+Setiap endpoint yang membutuhkan autentikasi menggunakan dependency
+`get_current_user` (JWT Bearer token dari header Authorization).
+"""
+
 import os
 import sys
 
-# Add the current directory (api/) to sys.path so Vercel can resolve local imports
+# Vercel serverless: tambahkan folder api/ ke sys.path agar import lokal resolve.
+# Di VPS biasa (uvicorn api.index:app) ini tidak berpengaruh.
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import glob
@@ -9,7 +28,7 @@ import json
 import uuid
 import hmac
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Depends, Request
@@ -26,13 +45,15 @@ from sqlalchemy.orm import Session
 from database import get_db, init_db
 from models import User
 from auth import get_current_user, check_token_limit, decode_token
-from config.plans import get_plan
+from config.plans import get_package, TOKEN_PACKAGES, FREE_TOKENS, MAX_REFS
 
 
 load_dotenv()
 
-app = FastAPI(title="ResearchBuilder Web UI")
+app = FastAPI(title="ResearchBuilder API")
 
+# CORS: Izinkan frontend (Vercel/localhost) mengakses API.
+# Konfigurasi via env var CORS_ORIGINS (comma-separated).
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
 
 app.add_middleware(
@@ -43,11 +64,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Direktori output untuk menyimpan hasil pipeline (JSON state, markdown, docx).
+# Di Vercel menggunakan /tmp karena serverless tidak punya persistent disk.
 OUTPUT_DIR = "/tmp" if os.environ.get("VERCEL") else os.getenv("OUTPUT_DIR", "./output")
 Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 Path(os.path.join(OUTPUT_DIR, "runs")).mkdir(parents=True, exist_ok=True)
 
 class GenerateRequest(BaseModel):
+    """Request body untuk endpoint /api/generate (batch pipeline mode)."""
     tema: str
     bahasa: Optional[str] = "id"
     resume: Optional[bool] = False
@@ -61,8 +85,8 @@ class GenerateRequest(BaseModel):
     is_draft_review: Optional[bool] = False
     document_type: Optional[str] = "artikel"
 
-# Track background running states
-# Store pipeline_id: status
+# In-memory store: track status background pipeline tasks.
+# Key = pipeline_id, Value = "running" | "completed" | "failed: <error>"
 active_runs = {}
 
 def bg_run_pipeline(
@@ -75,6 +99,11 @@ def bg_run_pipeline(
     max_references: Optional[int] = None,
     user_id: Optional[str] = None,
 ):
+    """
+    Background task: jalankan full pipeline article generation.
+    Dipanggil oleh BackgroundTasks FastAPI (non-blocking).
+    Setelah selesai, update token_usage di database user.
+    """
     try:
         active_runs[pipeline_id] = "running"
         run_pipeline(
@@ -118,16 +147,8 @@ async def api_generate(
     # 1.1 Protect with Auth + Token Check
     check_token_limit(current_user, db)
 
-    # 1.3 Enforce Template Upload per Plan
-    plan = get_plan(current_user.plan)
-    if req.template_file_base64 and not plan.get("template_upload"):
-        raise HTTPException(
-            status_code=403,
-            detail="Fitur upload template hanya tersedia untuk pengguna plan Premium."
-        )
-
-    # 1.2 Max Refs per Plan
-    max_refs = plan.get("max_refs", 10)
+    # Max refs (all users get same limit)
+    max_refs = MAX_REFS
 
     # Generate unique ID or resume
     if req.resume and req.pipeline_id:
@@ -305,34 +326,9 @@ async def api_runs(current_user: User = Depends(get_current_user)):
         except Exception:
             pass
             
-    # 1.4 Enforce History Retention
-    from datetime import datetime, timezone, timedelta
-    plan = get_plan(current_user.plan)
-    history_days = plan.get("history_days", -1)
-    
-    filtered_runs = []
-    if history_days == -1:
-        filtered_runs = runs
-    else:
-        now = datetime.now(timezone.utc)
-        for r in runs:
-            created_at_str = r.get("created_at")
-            if not created_at_str:
-                continue
-            try:
-                dt = datetime.fromisoformat(created_at_str)
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                cutoff = now - timedelta(days=history_days)
-                if dt >= cutoff:
-                    filtered_runs.append(r)
-            except Exception:
-                # Keep run if parsing fails
-                filtered_runs.append(r)
-
     # Sort by created_at desc
-    filtered_runs.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-    return filtered_runs
+    runs.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return runs
 
 @app.get("/api/download/{pipeline_id}/{filename}")
 async def api_download_file(
@@ -602,12 +598,13 @@ async def api_register(req: RegisterRequest, db: Session = Depends(get_db)):
         email=req.email,
         password_hash=hash_password(req.password),
         full_name=req.full_name,
+        tokens_purchased=FREE_TOKENS,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     token = create_access_token(user.id)
-    return {"token": token, "user": {"id": user.id, "email": user.email, "plan": user.plan}}
+    return {"token": token, "user": {"id": user.id, "email": user.email, "tokens_balance": user.tokens_balance}}
 
 @app.post("/api/auth/login")
 async def api_login(req: LoginRequest, db: Session = Depends(get_db)):
@@ -615,22 +612,17 @@ async def api_login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Email atau password salah")
     token = create_access_token(user.id)
-    return {"token": token, "user": {"id": user.id, "email": user.email, "plan": user.plan}}
+    return {"token": token, "user": {"id": user.id, "email": user.email, "tokens_balance": user.tokens_balance}}
 
 @app.get("/api/auth/me")
 async def api_me(current_user: User = Depends(get_current_user)):
-    plan = get_plan(current_user.plan)
-    tokens = plan["tokens"]
     return {
         "id": current_user.id,
         "email": current_user.email,
         "full_name": current_user.full_name,
-        "plan": current_user.plan,
+        "tokens_balance": current_user.tokens_balance,
         "tokens_used": current_user.tokens_used,
-        "tokens_total": tokens,
-        "tokens_remaining": current_user.tokens_remaining(tokens),
-        "trial_ends_at": current_user.trial_ends_at.isoformat() if current_user.trial_ends_at else None,
-        "trial_expired": current_user.is_trial_expired(),
+        "tokens_purchased": current_user.tokens_purchased,
     }
 
 # ── Payment & Webhook Endpoints ────────────────────────────────────────────────
@@ -639,7 +631,7 @@ from models import Payment
 from fastapi import Request
 
 class PaymentCreateRequest(PydanticBase):
-    plan: str
+    package: str
 
 @app.post("/api/payment/create")
 async def create_payment_link(
@@ -648,149 +640,148 @@ async def create_payment_link(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if req.plan not in ["basic", "premium"]:
-        raise HTTPException(status_code=400, detail="Plan tidak valid")
-        
-    amount = 49000 if req.plan == "basic" else 99000
-    plan_name = "Basic Monthly" if req.plan == "basic" else "Premium Monthly"
-    
-    # Check if MAYAR_API_KEY is available
+    pkg = get_package(req.package)
+    if not pkg:
+        raise HTTPException(status_code=400, detail="Paket tidak valid")
+
+    amount = pkg["price"]
+    tokens = pkg["tokens"]
+    label = pkg["label"]
+
+    payment = Payment(
+        user_id=current_user.id,
+        package_key=req.package,
+        tokens_added=tokens,
+        amount=amount,
+        status="pending"
+    )
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+
     mayar_api_key = os.getenv("MAYAR_API_KEY")
-    
+
     if not mayar_api_key:
-        # Development / Sandbox Mode
-        mock_payment_id = f"pay_{uuid.uuid4().hex[:8]}"
-        
-        # Save to DB
-        payment = Payment(
-            user_id=current_user.id,
-            mayar_payment_id=mock_payment_id,
-            plan=req.plan,
-            amount=amount,
-            status="pending"
-        )
-        db.add(payment)
+        payment.status = "paid"
+        current_user.tokens_purchased += tokens
         db.commit()
-        
-        referer = request.headers.get("referer", "http://127.0.0.1:8000/")
-        base_url = str(request.base_url)
-        checkout_url = f"{base_url}api/payment/mock-checkout?payment_id={mock_payment_id}&plan={req.plan}&email={current_user.email}&redirect_url={referer}"
-        return {"payment_url": checkout_url}
-        
-    # Real Mayar API integration
-    product_id = os.getenv(f"MAYAR_{req.plan.upper()}_PRODUCT_ID")
-    if not product_id:
-        raise HTTPException(status_code=500, detail=f"MAYAR_{req.plan.upper()}_PRODUCT_ID tidak dikonfigurasi di .env")
-        
-    headers = {
-        "Authorization": f"Bearer {mayar_api_key}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "name": f"ResearchBuilder {plan_name}",
-        "amount": amount,
-        "description": f"Upgrade ke {plan_name} ResearchBuilder",
-        "redirectUrl": "http://127.0.0.1:8000/",
-        "email": current_user.email,
-        "customerName": current_user.full_name or "User"
-    }
-    
+        return {
+            "payment_id": payment.id,
+            "qr_url": None,
+            "amount": amount,
+            "package_label": label,
+            "tokens": tokens,
+            "mock": True,
+        }
+
     try:
+        headers = {
+            "Authorization": f"Bearer {mayar_api_key}",
+            "Content-Type": "application/json",
+        }
         async with httpx.AsyncClient() as client:
-            resp = await client.post("https://api.mayar.id/v2/payment/link", json=payload, headers=headers, timeout=10.0)
-            if resp.status_code != 200:
-                raise HTTPException(status_code=502, detail=f"Gagal menghubungi Mayar API: {resp.text}")
-            data = resp.json()
-            link_data = data.get("data", {})
-            payment_url = link_data.get("link")
-            mayar_id = link_data.get("id")
-            
-            if not payment_url or not mayar_id:
-                raise HTTPException(status_code=502, detail="Format respon Mayar API tidak valid")
-                
-            # Save to DB
-            payment = Payment(
-                user_id=current_user.id,
-                mayar_payment_id=mayar_id,
-                plan=req.plan,
-                amount=amount,
-                status="pending"
+            resp = await client.post(
+                "https://api.mayar.id/hl/v1/qrcode/create",
+                json={"amount": amount},
+                headers=headers,
+                timeout=15.0,
             )
-            db.add(payment)
-            db.commit()
-            
-            return {"payment_url": payment_url}
+            if resp.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"Mayar QRIS API error: {resp.text}")
+            data = resp.json().get("data", {})
+            qr_url = data.get("url")
+            if not qr_url:
+                raise HTTPException(status_code=502, detail="Mayar QRIS response missing QR URL")
+
+            return {
+                "payment_id": payment.id,
+                "qr_url": qr_url,
+                "amount": amount,
+                "package_label": label,
+                "tokens": tokens,
+            }
+    except HTTPException:
+        raise
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=f"Error membuat payment link: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error membuat QRIS: {str(e)}")
+
+@app.get("/api/payment/{payment_id}/status")
+async def payment_status(
+    payment_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    payment = db.query(Payment).filter(
+        Payment.id == payment_id,
+        Payment.user_id == current_user.id,
+    ).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+
+    if payment.status == "pending" and payment.created_at:
+        age = (datetime.now(timezone.utc).replace(tzinfo=None) - payment.created_at).total_seconds()
+        if age > 1800:
+            payment.status = "expired"
+            db.commit()
+
+    return {
+        "status": payment.status,
+        "tokens_added": payment.tokens_added,
+    }
 
 @app.post("/api/webhook/mayar")
 async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
     body = await request.body()
-    
+
     signature = request.headers.get("x-mayar-signature")
     webhook_secret = os.getenv("MAYAR_WEBHOOK_SECRET")
-    
+
     is_mock = request.headers.get("x-mock-payment") == "true"
-    
-    if webhook_secret and not is_mock:
+    mayar_api_key = os.getenv("MAYAR_API_KEY")
+
+    allow_mock = is_mock and not mayar_api_key
+
+    if webhook_secret and not allow_mock:
         if not signature:
             raise HTTPException(status_code=400, detail="Missing signature header")
-        
+
         expected_sig = hmac.new(
             webhook_secret.encode(),
             body,
             hashlib.sha256
         ).hexdigest()
-        
+
         if not hmac.compare_digest(expected_sig, signature):
             raise HTTPException(status_code=400, detail="Invalid signature")
-            
+
     try:
         payload = json.loads(body)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
-        
+
     data = payload.get("data", {})
-    payment_id = data.get("paymentId") or data.get("id")
-    email = data.get("email")
-    if not email and "customer" in data:
-        email = data["customer"].get("email")
-        
-    if not payment_id or not email:
-        raise HTTPException(status_code=400, detail="Missing paymentId or email in payload")
-        
-    payment = db.query(Payment).filter(Payment.mayar_payment_id == payment_id).first()
+    amount = data.get("amount", 0)
+    mayar_txn_id = data.get("id") or data.get("transactionId") or data.get("paymentId")
+
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30)
+    payment = db.query(Payment).filter(
+        Payment.status == "pending",
+        Payment.amount == amount,
+        Payment.created_at >= cutoff,
+    ).order_by(Payment.created_at.asc()).first()
+
     if not payment:
-        user = db.query(User).filter(User.email == email).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found for this webhook email")
-        plan = "basic"
-        amount = data.get("amount", 49000)
-        if amount >= 99000:
-            plan = "premium"
-            
-        payment = Payment(
-            user_id=user.id,
-            mayar_payment_id=payment_id,
-            plan=plan,
-            amount=amount,
-            status="pending"
-        )
-        db.add(payment)
-        db.commit()
-        db.refresh(payment)
-        
-    user = payment.user
+        return {"status": "ok", "message": "No matching pending payment found"}
+
     if payment.status != "paid":
         payment.status = "paid"
-        user.plan = payment.plan
-        user.tokens_used = 0
-        user.tokens_reset_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        if mayar_txn_id:
+            payment.mayar_payment_id = mayar_txn_id
+        user = payment.user
+        user.tokens_purchased += payment.tokens_added
         db.commit()
-        
-    return {"status": "success", "message": f"User upgraded to {user.plan}"}
+
+    return {"status": "success", "message": f"Berhasil menambahkan {payment.tokens_added} token"}
 
 @app.get("/api/payments/history")
 async def api_payment_history(
@@ -807,7 +798,7 @@ async def api_payment_history(
     return [
         {
             "id": p.id[:8],
-            "plan": p.plan,
+            "tokens_added": p.tokens_added,
             "amount": p.amount,
             "status": p.status,
             "created_at": p.created_at.isoformat() if p.created_at else None,
@@ -1094,12 +1085,9 @@ async def api_research_select_title(
     session.pipeline_id = pipeline_state.pipeline_id
     _save_research_session(session)
 
-    plan = get_plan(current_user.plan)
-    max_refs = plan.get("max_refs", 10)
-
     background_tasks.add_task(
         _bg_run_literature_to_outline,
-        research_id, pipeline_state.pipeline_id, max_refs,
+        research_id, pipeline_state.pipeline_id, MAX_REFS,
         session.structure_preset, current_user.id,
     )
     return {"status": "processing_literature", "pipeline_id": pipeline_state.pipeline_id}
@@ -1462,9 +1450,12 @@ async def api_research_status(
     return result
 
 @app.get("/api/payment/mock-checkout", response_class=HTMLResponse)
-async def mock_checkout_page(payment_id: str, plan: str, email: str, redirect_url: Optional[str] = "/"):
-    plan_name = "Basic Monthly" if plan == "basic" else "Premium Monthly"
-    amount_str = "Rp 49.000" if plan == "basic" else "Rp 99.000"
+async def mock_checkout_page(payment_id: str, package: str, email: str, redirect_url: Optional[str] = "/"):
+    pkg = get_package(package) or {"label": package, "price": 0, "tokens": 0}
+    pkg_label = pkg["label"]
+    amount = pkg["price"]
+    tokens = pkg["tokens"]
+    amount_str = f"Rp {amount:,}".replace(",", ".")
     
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1637,7 +1628,7 @@ async def mock_checkout_page(payment_id: str, plan: str, email: str, redirect_ur
         <div class="invoice-details">
             <div class="detail-row">
                 <span class="detail-label">Produk</span>
-                <span class="detail-value">ResearchBuilder {plan_name}</span>
+                <span class="detail-value">ResearchBuilder Token {pkg_label} ({tokens:,} token)</span>
             </div>
             <div class="detail-row">
                 <span class="detail-label">Email Pengguna</span>
@@ -1678,7 +1669,7 @@ async def mock_checkout_page(payment_id: str, plan: str, email: str, redirect_ur
                 event: "payment.success",
                 data: {{
                     paymentId: "{payment_id}",
-                    amount: {49000 if plan == 'basic' else 99000},
+                    amount: {amount},
                     customer: {{
                         email: "{email}",
                         name: "User"

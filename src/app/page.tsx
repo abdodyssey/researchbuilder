@@ -14,16 +14,10 @@ import {
   ArrowRight,
   Sun,
   Moon,
-  ShieldCheck,
-  Zap,
   Globe,
   Award,
   ChevronDown,
   LayoutDashboard,
-  Users,
-  Compass,
-  FileCode,
-  Check
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -109,11 +103,11 @@ export default function LandingPage() {
     },
     {
       q: "Apakah saya bisa mengunggah templat dokumen saya sendiri?",
-      a: "Bisa, fitur ini tersedia khusus untuk pengguna dengan paket langganan Premium. Anda dapat mengunggah file .docx kosong sebagai templat agar hasil ekspor artikel mengikuti struktur format instansi Anda."
+      a: "Bisa. Semua pengguna dapat mengunggah file .docx kosong sebagai templat agar hasil ekspor artikel mengikuti struktur format instansi Anda."
     },
     {
       q: "Bagaimana sistem penggunaan token dihitung?",
-      a: "Pemakaian token dihitung secara proporsional sesuai jumlah panjang dokumen (referensi, draf, dan revisi) yang diproses dan dihasilkan oleh model AI pada setiap langkah riset Anda. Paket Trial mendapatkan 100.000 token, Basic 500.000 token/bulan, dan Premium memiliki akses tanpa batas (Unlimited)."
+      a: "Pemakaian token dihitung secara proporsional sesuai jumlah panjang dokumen (referensi, draf, dan revisi) yang diproses dan dihasilkan oleh model AI pada setiap langkah riset Anda. Anda bisa membeli token sesuai kebutuhan — mulai dari 50.000 token seharga Rp 25.000. Token tidak hangus dan bisa digunakan kapan saja."
     }
   ];
 
@@ -179,12 +173,12 @@ export default function LandingPage() {
           </h1>
           
           <p className="text-sm md:text-base text-text-secondary mt-6 max-w-3xl leading-relaxed">
-            ResearchBuilder menyusun draf naskah jurnal lengkap secara instan. Temukan novelty riset secara otomatis, peroleh referensi pustaka yang valid, dan review kualitas draf naskah Anda agar sesuai dengan template jurnal penerbit target.
+            Semua fitur terbuka tanpa langganan. Bayar sesuai pemakaian dengan sistem token — daftar gratis dan langsung dapatkan 10.000 token untuk mulai menyusun draf naskah jurnal lengkap secara instan.
           </p>
 
           <div className="mt-10 flex flex-wrap justify-center gap-4">
             <Button onClick={handleCTA} className="py-3 px-8 text-sm" icon={<ArrowRight className="w-4 h-4" />}>
-              {token ? "Pergi ke Dashboard" : "Mulai Riset Gratis"}
+              {token ? "Pergi ke Dashboard" : "Coba Gratis — 10.000 Token"}
             </Button>
             <a href="#features">
               <Button variant="secondary" className="py-3 px-8 text-sm">
@@ -289,7 +283,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Premium Benefits Section */}
+      {/* Benefits Section */}
       <section id="benefits" className="max-w-7xl mx-auto px-6 py-20 border-b border-border-color">
         <div className="text-center max-w-2xl mx-auto mb-16">
           <Badge variant="trial" className="mb-3">KEUNGGULAN UTAMA</Badge>
@@ -331,76 +325,71 @@ export default function LandingPage() {
       {/* Pricing Section */}
       <section id="pricing" className="max-w-5xl mx-auto px-6 py-20 border-b border-border-color w-full">
         <div className="text-center mb-16">
-          <Badge variant="trial" className="mb-3">PAKET BERLANGGANAN</Badge>
-          <h2 className="text-2xl font-bold font-outfit text-text-primary tracking-tight font-extrabold">Paket Langganan Transparan</h2>
-          <p className="text-xs text-text-secondary mt-2">Dapatkan akses penuh sesuai kebutuhan pembuatan artikel ilmiah Anda</p>
+          <Badge variant="basic" className="mb-3">PAKET TOKEN</Badge>
+          <h2 className="text-2xl font-bold font-outfit text-text-primary tracking-tight font-extrabold">Beli Token Sesuai Kebutuhan</h2>
+          <p className="text-xs text-text-secondary mt-2">Bayar sesuai pemakaian. Semua fitur terbuka. Token tidak hangus.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Trial Plan */}
+          {/* Starter */}
           <Card className="flex flex-col justify-between border-border-color bg-bg-card/50">
             <div>
-              <Badge variant="trial">Trial</Badge>
-              <h3 className="text-xl font-bold text-text-primary mt-4">Gratis</h3>
-              <p className="text-xs text-text-secondary mt-2">Untuk mencoba alur penulisan otomatis</p>
+              <Badge variant="basic">Starter</Badge>
+              <h3 className="text-xl font-bold text-text-primary mt-4">Rp 25.000</h3>
+              <p className="text-xs text-text-secondary mt-2">50.000 token untuk mencoba fitur utama</p>
               <ul className="text-xs text-text-secondary space-y-2 mt-6 border-t border-border-color/60 pt-6">
-                <li className="flex items-center gap-2">✓ 100.000 token komputasi AI</li>
-                <li className="flex items-center gap-2">✓ 1 target draf penulisan</li>
-                <li className="flex items-center gap-2">✓ Bahasa Indonesia & Inggris</li>
-                <li className="text-text-muted">✗ Unggah templat dokumen .docx</li>
-                <li className="text-text-muted">✗ Prioritas antrean pemrosesan</li>
+                <li className="flex items-center gap-2">✓ 50.000 token komputasi AI</li>
+                <li className="flex items-center gap-2">✓ Semua fitur terbuka</li>
+                <li className="flex items-center gap-2">✓ Token tidak hangus</li>
+                <li className="flex items-center gap-2">✓ Unggah templat dokumen .docx</li>
               </ul>
             </div>
             <Button variant="secondary" onClick={handleCTA} className="w-full mt-8 py-2 text-xs">
-              Mulai Sekarang
+              Beli Token
             </Button>
           </Card>
 
-          {/* Basic Plan */}
-          <Card className="flex flex-col justify-between border-border-color bg-bg-card/50 relative">
-            <div>
-              <Badge variant="basic">Basic</Badge>
-              <h3 className="text-xl font-bold text-text-primary mt-4">
-                Rp 49.000 <span className="text-xs text-text-muted">/ bulan</span>
-              </h3>
-              <p className="text-xs text-text-secondary mt-2">Untuk penulis akademis kasual</p>
-              <ul className="text-xs text-text-secondary space-y-2 mt-6 border-t border-border-color/60 pt-6">
-                <li className="flex items-center gap-2">✓ 500.000 token / bulan</li>
-                <li className="flex items-center gap-2">✓ Maksimal 10 draf tersimpan</li>
-                <li className="flex items-center gap-2">✓ Bahasa Indonesia & Inggris</li>
-                <li className="text-text-muted">✗ Unggah templat dokumen .docx</li>
-                <li className="flex items-center gap-2">✓ Akses review & skor kelayakan</li>
-              </ul>
-            </div>
-            <Button onClick={handleCTA} className="w-full mt-8 py-2 text-xs">
-              Mulai Langganan
-            </Button>
-          </Card>
-
-          {/* Premium Plan */}
+          {/* Standard */}
           <Card className="flex flex-col justify-between border-primary/40 bg-bg-card relative">
             <div className="absolute top-4 right-4">
               <Badge variant="premium">Terpopuler</Badge>
             </div>
             <div>
-              <Badge variant="premium">Premium</Badge>
-              <h3 className="text-xl font-bold text-text-primary mt-4">
-                Rp 99.000 <span className="text-xs text-text-muted">/ bulan</span>
-              </h3>
-              <p className="text-xs text-text-secondary mt-2">Untuk peneliti & akademisi aktif</p>
+              <Badge variant="premium">Standard</Badge>
+              <h3 className="text-xl font-bold text-text-primary mt-4">Rp 75.000</h3>
+              <p className="text-xs text-text-secondary mt-2">200.000 token untuk penulisan reguler</p>
               <ul className="text-xs text-text-secondary space-y-2 mt-6 border-t border-border-color/60 pt-6">
-                <li className="flex items-center gap-2">✓ Kuota token komputasi Unlimited</li>
-                <li className="flex items-center gap-2">✓ Draf tersimpan tak terbatas</li>
-                <li className="flex items-center gap-2">✓ Bahasa Indonesia & Inggris</li>
+                <li className="flex items-center gap-2">✓ 200.000 token komputasi AI</li>
+                <li className="flex items-center gap-2">✓ Semua fitur terbuka</li>
+                <li className="flex items-center gap-2">✓ Token tidak hangus</li>
                 <li className="flex items-center gap-2">✓ Unggah templat dokumen .docx</li>
-                <li className="flex items-center gap-2">✓ Akses review skor & catatan perbaikan</li>
               </ul>
             </div>
             <Button onClick={handleCTA} className="w-full mt-8 py-2 text-xs">
-              Mulai Langganan
+              Beli Token
+            </Button>
+          </Card>
+
+          {/* Bulk */}
+          <Card className="flex flex-col justify-between border-border-color bg-bg-card/50">
+            <div>
+              <Badge variant="basic">Bulk</Badge>
+              <h3 className="text-xl font-bold text-text-primary mt-4">Rp 150.000</h3>
+              <p className="text-xs text-text-secondary mt-2">500.000 token untuk penggunaan intensif</p>
+              <ul className="text-xs text-text-secondary space-y-2 mt-6 border-t border-border-color/60 pt-6">
+                <li className="flex items-center gap-2">✓ 500.000 token komputasi AI</li>
+                <li className="flex items-center gap-2">✓ Semua fitur terbuka</li>
+                <li className="flex items-center gap-2">✓ Token tidak hangus</li>
+                <li className="flex items-center gap-2">✓ Unggah templat dokumen .docx</li>
+              </ul>
+            </div>
+            <Button variant="secondary" onClick={handleCTA} className="w-full mt-8 py-2 text-xs">
+              Beli Token
             </Button>
           </Card>
         </div>
+
+        <p className="text-center text-[11px] text-text-muted mt-6">Pengguna baru mendapatkan 10.000 token gratis saat pendaftaran.</p>
       </section>
 
       {/* FAQ Section */}

@@ -1,3 +1,20 @@
+"""
+Agent 7: Revision — Perbaikan Draft Berdasarkan Review
+========================================================
+Menerima isu-isu kritis dari Agent 6 (Peer Reviewer) dan merevisi
+section-section yang bermasalah.
+
+Flow:
+1. Terima list sections + critical issues + referensi valid
+2. LLM merevisi section yang terkena dampak isu
+3. Section tanpa isu dikembalikan tanpa perubahan (agar draft tetap utuh)
+
+Prinsip:
+- Tidak mengarang data/referensi baru di luar yang tersedia
+- Mempertahankan gaya akademik formal
+- Semua section dikembalikan (bukan hanya yang direvisi)
+"""
+
 import json
 import re
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -9,6 +26,18 @@ SYSTEM = build_system_prompt("expert academic editor and reviewer")
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
 def run(sections: list[dict], critical_issues: list[dict], references: list[dict], bahasa: str = "id") -> list[dict]:
+    """
+    Revisi sections berdasarkan isu kritis dari reviewer.
+
+    Args:
+        sections: List section draf saat ini [{id, title, content}]
+        critical_issues: Isu dari reviewer [{type, location, description, suggestion, severity}]
+        references: Referensi valid yang boleh disitasi [{id, title, snippet}]
+        bahasa: "id" (Indonesia) atau "en" (English)
+
+    Returns:
+        List section yang sudah direvisi [{id, title, content}]
+    """
     # Build text representations
     sections_text = ""
     for sec in sections:

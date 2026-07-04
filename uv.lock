@@ -854,7 +854,7 @@ wheels = [
 ]
 
 [[package]]
-name = "researchpilot"
+name = "researchbuilder"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

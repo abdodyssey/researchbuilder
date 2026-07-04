@@ -1,9 +1,22 @@
+"""
+Citation Checker — Validasi Sitasi dalam Artikel
+===================================================
+Memeriksa konsistensi sitasi antara isi artikel dan daftar referensi.
+
+Deteksi:
+- hallucinated: Sitasi [ref_xxx] yang ada di teks tapi TIDAK ada di daftar referensi
+  (artinya LLM mengarang ID referensi yang tidak exist)
+- uncited: Referensi yang ada di daftar tapi TIDAK pernah disitasi di teks
+  (referensi yang "mubazir" — tidak digunakan)
+
+Digunakan oleh file_writer.py saat export artikel untuk menampilkan warning.
+"""
+
 import re
 
 
 def extract_inline_citations(text: str) -> set[str]:
-    """Ekstrak semua [ref_xxx] dari teks."""
-    # match [ref_001] atau [ref_001, ref_002]
+    """Ekstrak semua ID sitasi [ref_xxx] dari teks."""
     found = set()
     for m in re.finditer(r"\[([ref_\d,\s]+)\]", text):
         for part in m.group(1).split(","):
@@ -14,6 +27,15 @@ def extract_inline_citations(text: str) -> set[str]:
 
 
 def check_citations(sections: list[dict], references: list[dict]) -> dict:
+    """
+    Bandingkan sitasi inline vs daftar referensi.
+
+    Returns dict:
+    - all_inline: semua ID yang ditemukan di teks
+    - hallucinated: ID yang ada di teks tapi tidak di referensi (LLM ngarang)
+    - uncited: ID referensi yang tidak pernah disitasi
+    - total_inline / total_hallucinated: counts
+    """
     valid_ids = {r["id"] for r in references}
 
     all_inline = set()

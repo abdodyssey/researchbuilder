@@ -1,3 +1,19 @@
+"""
+Agent 5: Writing
+==================
+Tulis konten tiap section artikel berdasarkan outline yang sudah disusun.
+
+Fitur utama:
+- Per-section writing: setiap section ditulis independen dengan referensi yang relevan
+- Reference filtering: hanya referensi yang relevan dengan section yg dikirim ke LLM
+- Citation validation: sitasi yang dihasilkan LLM divalidasi terhadap daftar referensi global
+- Methodology guard: khusus section metodologi, ada instruksi tambahan agar tidak mengarang
+- Chain-of-thought: LLM diminta lakukan fact_extraction dulu sebelum menulis (reduce hallucination)
+
+Input: WritingInput (section + context + references)
+Output: WritingSectionOutput (section_id, title, content, word_count, citations_used)
+"""
+
 import json
 import re
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -10,7 +26,15 @@ SYSTEM = build_system_prompt("academic writer producing formal research article 
 
 
 def get_relevant_references(section, all_references, top_n=4) -> list:
-    """Filter references to only include the ones relevant to this section."""
+    """
+    Filter referensi: hanya kirim yang relevan ke LLM untuk section ini.
+    Mencegah prompt overflow dan mengurangi hallucination sitasi.
+
+    Strategi:
+      1. Prioritaskan referensi yang di-assign eksplisit di outline (references_to_cite)
+      2. Jika belum cukup top_n, cari referensi dengan keyword overlap tertinggi
+         (cocokkan title + key_points section dengan title + snippet referensi)
+    """
     explicit_ids = []
     if hasattr(section, "references_to_cite") and section.references_to_cite:
         for r_id in section.references_to_cite:
@@ -65,7 +89,11 @@ def get_relevant_references(section, all_references, top_n=4) -> list:
 
 
 def sanitize_citations(content: str, allowed_ids: set) -> str:
-    """Validate all [ref_xxx] citations and remove any that are not in allowed_ids."""
+    """
+    Validasi semua sitasi [ref_xxx] di dalam konten.
+    Hapus sitasi yang ID-nya tidak ada di daftar referensi global (allowed_ids).
+    Mencegah LLM mengarang ID referensi yang tidak exist.
+    """
     def replace_fn(match):
         parts = match.group(1).split(",")
         valid_parts = []
@@ -85,7 +113,11 @@ def sanitize_citations(content: str, allowed_ids: set) -> str:
 
 
 def refs_to_citation_list(references) -> str:
-    """Format referensi sebagai numbered list dengan ID eksplisit."""
+    """
+    Format daftar referensi menjadi teks yang dikirim ke LLM.
+    Tiap referensi menampilkan: ID, Penulis, Tahun, Judul, Isi (max 3000 char).
+    Format ini memudahkan LLM mengutip dengan ID yang benar.
+    """
     lines = []
     for r in references:
         ref = r.model_dump() if hasattr(r, "model_dump") else r
@@ -101,6 +133,16 @@ def refs_to_citation_list(references) -> str:
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
 def write_section(inp: WritingInput, template_text: str = "", constraints=None) -> WritingSectionOutput:
+    """
+    Tulis satu section artikel ilmiah.
+
+    Flow:
+      1. Filter referensi relevan untuk section ini (max 4)
+      2. Bangun prompt dengan aturan sitasi ketat + instruksi penulisan
+      3. Kirim ke LLM, terima JSON (fact_extraction → content)
+      4. Validasi: hapus sitasi yang tidak ada di daftar referensi global
+      5. Return WritingSectionOutput
+    """
     # Filter references for this section to avoid prompt overflow and hallucination
     relevant_refs = get_relevant_references(inp.section, inp.references_detail, top_n=4)
     
@@ -204,6 +246,10 @@ Balas HANYA JSON valid:
 
 
 def run(sections, context, references_detail, template_text: str = "", constraints=None) -> WritingOutput:
+    """
+    Tulis semua sections secara berurutan (batch mode).
+    Jika satu section gagal, tetap lanjut ke section berikutnya dengan error message.
+    """
     results = []
     for section in sections:
         inp = WritingInput(

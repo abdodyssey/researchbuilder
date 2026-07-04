@@ -1,3 +1,27 @@
+"""
+ResearchBuilder — Pipeline Orchestrator
+=========================================
+Menjalankan pipeline generasi artikel akademik secara berurutan (7 stage):
+
+  1. topic_narrowing     → Persempit tema umum jadi fokus riset spesifik
+  2. literature_search   → Cari literatur akademis via Tavily search
+  3. synthesis           → Sintesis temuan pustaka, identifikasi tema & gap
+  4. outline             → Susun kerangka artikel (sections, word targets)
+  5. writing             → Tulis tiap section berdasarkan outline + referensi
+  6. draft_adaptation    → Sesuaikan draf ke format template jurnal (opsional)
+  7. review              → Peer-review kualitas + auto-revision jika ada issue kritis
+
+Fitur penting:
+- RESUMABLE: Jika pipeline gagal di tengah, bisa di-resume dari stage terakhir yg sukses
+- DRAFT REVIEW MODE: Jika user upload draf, skip stage 1-5 dan langsung review+adaptasi
+- AUTO-REVISION: Jika reviewer menemukan issue severity=critical, jalankan revision agent
+- TOKEN TRACKING: Setiap panggilan LLM dicatat penggunaan tokennya per pipeline
+
+File ini dipanggil oleh:
+- api/index.py (via BackgroundTasks untuk web API)
+- api/main.py (langsung untuk CLI mode)
+"""
+
 import os
 from pathlib import Path
 
@@ -30,6 +54,11 @@ console = Console()
 
 
 def _add_token_usage(state, agent_name: str, resp):
+    """
+    Catat penggunaan token dari response LLM ke dalam pipeline state.
+    Otomatis menghitung total kumulatif dari semua agent.
+    Dipanggil setelah setiap panggilan LLM berhasil.
+    """
     try:
         usage = {
             "prompt_tokens": resp.usage.prompt_tokens,
@@ -78,6 +107,25 @@ def run_pipeline(
     template_path: str = None,
     max_references: int | None = None,
 ) -> str:
+    """
+    Fungsi utama: jalankan seluruh pipeline generasi artikel.
+
+    Args:
+        tema:           Tema/topik umum yang akan diteliti
+        bahasa:         Bahasa output artikel ("id" atau "en")
+        output_dir:     Direktori untuk menyimpan output (JSON state, md, docx)
+        resume:         Jika True, lanjutkan pipeline yang sebelumnya gagal/interrupted
+        pipeline_id:    ID pipeline spesifik (untuk resume)
+        template_path:  Path ke template .docx jurnal (opsional)
+        max_references: Jumlah maksimum referensi yang dicari (override dari plan)
+
+    Returns:
+        Path ke file artikel markdown yang dihasilkan
+
+    Flow:
+        1. Load/create state → 2. Parse template (jika ada) → 3. Jalankan 7 agent
+        berurutan → 4. Export ke markdown + DOCX → 5. Simpan ke history
+    """
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     state = load_state(output_dir, pipeline_id) if (resume or pipeline_id) else None
