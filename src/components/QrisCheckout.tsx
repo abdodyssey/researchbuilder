@@ -87,9 +87,9 @@ export function QrisCheckout({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === "Escape" && status !== "pending") onClose();
+      if (e.key === "Escape") onClose();
     },
-    [status, onClose]
+    [onClose]
   );
 
   useEffect(() => {
@@ -102,21 +102,19 @@ export function QrisCheckout({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-sm bg-bg-card border border-border-color rounded-xl shadow-xl animate-in fade-in zoom-in-95">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-color">
           <h3 className="text-sm font-extrabold font-outfit text-text-primary">
             Pembayaran QRIS
           </h3>
-          {status !== "pending" && (
-            <button
-              onClick={onClose}
-              className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-main transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-main transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Body */}
@@ -157,6 +155,10 @@ export function QrisCheckout({
                   {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
                 </span>
               </div>
+
+              <Button variant="secondary" size="sm" onClick={onClose} className="w-full">
+                Batalkan Pembayaran
+              </Button>
             </>
           )}
 
