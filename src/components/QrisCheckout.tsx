@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/context/AuthContext";
-import { X, Loader2, CheckCircle2, AlertCircle, QrCode } from "lucide-react";
+import { X, Loader2, CheckCircle2, AlertCircle, QrCode, Download } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface QrisCheckoutProps {
@@ -92,6 +92,24 @@ export function QrisCheckout({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
+  const downloadQrImage = async () => {
+    if (!qrUrl) return;
+    try {
+      const response = await fetch(qrUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `QRIS-${packageLabel}-${amount}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      window.open(qrUrl, "_blank");
+    }
+  };
+
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
 
@@ -130,12 +148,21 @@ export function QrisCheckout({
           {status === "pending" && qrUrl && (
             <>
               {/* QR Image */}
-              <div className="bg-white rounded-lg p-3 mb-4">
+              <div className="bg-white rounded-lg p-3 mb-4 flex flex-col items-center gap-2">
                 <img
                   src={qrUrl}
                   alt="QRIS QR Code"
                   className="w-52 h-52 object-contain"
                 />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={downloadQrImage}
+                  className="flex items-center gap-1.5 text-[11px] h-8 py-1"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Unduh QR Code
+                </Button>
               </div>
 
               <p className="text-xs text-text-secondary text-center mb-3">
