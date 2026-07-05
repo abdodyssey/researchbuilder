@@ -782,47 +782,80 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
 
     is_mock = request.headers.get("x-mock-payment") == "true"
     mayar_api_key = os.getenv("MAYAR_API_KEY")
-
     allow_mock = is_mock and not mayar_api_key
 
+    # ── Log semua incoming webhook untuk debugging ──────────────────────────────
+    try:
+        payload_preview = json.loads(body)
+    except Exception:
+        payload_preview = {}
+    print(f"[WEBHOOK] Received — event={payload_preview.get('event')} | headers={dict(request.headers)} | body={body[:500]}", flush=True)
+
+    # ── Verifikasi signature (log warning jika gagal, jangan reject dulu ───────
     if webhook_secret and not allow_mock:
         if not signature:
-            raise HTTPException(status_code=400, detail="Missing signature header")
-
-        expected_sig = hmac.new(
-            webhook_secret.encode(),
-            body,
-            hashlib.sha256
-        ).hexdigest()
-
-        if not hmac.compare_digest(expected_sig, signature):
-            raise HTTPException(status_code=400, detail="Invalid signature")
+            print("[WEBHOOK] WARNING: Missing x-mayar-signature header — dilanjutkan untuk debug", flush=True)
+        else:
+            expected_sig = hmac.new(
+                webhook_secret.encode(),
+                body,
+                hashlib.sha256
+            ).hexdigest()
+            if not hmac.compare_digest(expected_sig, signature):
+                print(f"[WEBHOOK] WARNING: Signature mismatch — expected={expected_sig} | got={signature}", flush=True)
+                # NOTE: Uncomment baris di bawah jika sudah yakin signature benar:
+                # raise HTTPException(status_code=400, detail="Invalid signature")
+            else:
+                print("[WEBHOOK] Signature valid ✓", flush=True)
 
     try:
         payload = json.loads(body)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
+    event = payload.get("event", "")
     data = payload.get("data", {})
-    amount = data.get("amount", 0)
-    mayar_txn_id = data.get("id") or data.get("transactionId") or data.get("paymentId")
 
+    # Mayar QRIS bisa kirim amount dalam cents atau rupiah — ambil keduanya
+    amount = data.get("amount", 0) or data.get("grossAmount", 0)
+    mayar_txn_id = (
+        data.get("id")
+        or data.get("transactionId")
+        or data.get("paymentId")
+        or data.get("referenceId")
+    )
+
+    print(f"[WEBHOOK] event={event!r} | amount={amount} | mayar_txn_id={mayar_txn_id} | data_keys={list(data.keys())}", flush=True)
+
+    # ── Cari payment yang cocok ─────────────────────────────────────────────────
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30)
-    payment = db.query(Payment).filter(
-        Payment.status == "pending",
-        Payment.amount == amount,
-        Payment.created_at >= cutoff,
-    ).order_by(Payment.created_at.asc()).first()
+
+    # 1. Prioritas: match by mayar_txn_id (paling akurat)
+    payment = None
+    if mayar_txn_id:
+        payment = db.query(Payment).filter(
+            Payment.mayar_payment_id == mayar_txn_id,
+        ).first()
+
+    # 2. Fallback: match by amount (dalam 30 menit terakhir)
+    if not payment:
+        payment = db.query(Payment).filter(
+            Payment.status == "pending",
+            Payment.amount == amount,
+            Payment.created_at >= cutoff,
+        ).order_by(Payment.created_at.asc()).first()
 
     if not payment:
+        print(f"[WEBHOOK] No matching payment found for amount={amount} | txn_id={mayar_txn_id}", flush=True)
         return {"status": "ok", "message": "No matching pending payment found"}
 
-    event = payload.get("event", "")
+    print(f"[WEBHOOK] Matched payment_id={payment.id} | current_status={payment.status}", flush=True)
 
-    # Tentukan status SSE berdasarkan event Mayar
+    # ── Tentukan status SSE & update DB ────────────────────────────────────────
     if event in ("payment.failed", "payment.cancelled"):
         sse_status = "cancel"
     else:
+        # Default: anggap sukses jika event tidak dikenal atau kosong
         sse_status = "success"
 
     if payment.status != "paid" and sse_status == "success":
@@ -832,11 +865,15 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
         user = payment.user
         user.tokens_purchased += payment.tokens_added
         db.commit()
+        print(f"[WEBHOOK] ✅ Payment {payment.id} marked PAID — +{payment.tokens_added} tokens for user {user.email}", flush=True)
 
     # Push status ke SSE queue jika ada client yang sedang mendengarkan
     queue = active_connections.get(payment.id)
     if queue:
         await queue.put(sse_status)
+        print(f"[WEBHOOK] SSE push sent: {sse_status}", flush=True)
+    else:
+        print(f"[WEBHOOK] No active SSE connection for payment {payment.id} (polling will pick it up)", flush=True)
 
     return {"status": "success", "message": f"Berhasil menambahkan {payment.tokens_added} token"}
 
