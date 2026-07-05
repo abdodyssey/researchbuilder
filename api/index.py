@@ -42,8 +42,9 @@ from utils.llm_client import get_usage
 from utils.state_manager import load_state, STATE_FILE, PipelineState
 
 from sqlalchemy.orm import Session
+from sqlalchemy import update
 from database import get_db, init_db
-from models import User
+from models import User, Payment
 from auth import get_current_user, check_token_limit, decode_token
 from config.plans import get_package, TOKEN_PACKAGES, FREE_TOKENS, MAX_REFS
 
@@ -729,11 +730,17 @@ async def payment_status(
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
 
+    # Auto-expire: QRIS Mayar berlaku 15 menit (frontend timer) + 1 menit buffer
     if payment.status == "pending" and payment.created_at:
         age = (datetime.now(timezone.utc).replace(tzinfo=None) - payment.created_at).total_seconds()
-        if age > 1800:
-            payment.status = "expired"
+        if age > 960:  # 16 menit
+            db.execute(
+                update(Payment)
+                .where(Payment.id == payment.id, Payment.status == "pending")
+                .values(status="expired")
+            )
             db.commit()
+            db.refresh(payment)
 
     return {
         "status": payment.status,
@@ -873,31 +880,60 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
 
     print(f"[WEBHOOK] Matched payment_id={payment.id} | current_status={payment.status}", flush=True)
 
-    # ── Tentukan status SSE & update DB ────────────────────────────────────────
-    if event in ("payment.failed", "payment.cancelled"):
+    # ── Whitelist event: hanya proses event pembayaran yang valid ───────────────
+    VALID_SUCCESS_EVENTS = {"payment.received", "payment.success", "payment.paid", ""}
+    VALID_CANCEL_EVENTS  = {"payment.failed", "payment.cancelled"}
+
+    if event in VALID_CANCEL_EVENTS:
         sse_status = "cancel"
-    else:
-        # Default: anggap sukses jika event tidak dikenal atau kosong
+    elif event in VALID_SUCCESS_EVENTS:
         sse_status = "success"
+    else:
+        # Event tidak dikenal (mis. payment.updated, payment.refunded) — abaikan
+        print(f"[WEBHOOK] Ignoring unhandled event={event!r}", flush=True)
+        return {"status": "ok", "message": f"Event {event!r} not handled"}
 
-    if payment.status != "paid" and sse_status == "success":
-        payment.status = "paid"
-        if mayar_txn_id:
-            payment.mayar_payment_id = mayar_txn_id
-        user = payment.user
-        user.tokens_purchased += payment.tokens_added
+    # ── Early return jika sudah diproses (idempotency) ───────────────────────────
+    if payment.status == "paid":
+        print(f"[WEBHOOK] Payment {payment.id} already PAID — skipping (idempotent)", flush=True)
+        return {"status": "ok", "message": "Already processed"}
+
+    if sse_status == "success":
+        # ── ATOMIC UPDATE: hanya 1 request yang bisa ubah status pending→paid ──
+        # Jika ada 2 webhook Mayar bersamaan (retry), hanya 1 yang akan succeed.
+        rows_updated = db.execute(
+            update(Payment)
+            .where(Payment.id == payment.id, Payment.status == "pending")
+            .values(
+                status="paid",
+                mayar_payment_id=mayar_txn_id or payment.mayar_payment_id,
+            )
+        ).rowcount
+
+        if rows_updated == 0:
+            # Kondisi race: request lain sudah lebih dulu proses payment ini
+            print(f"[WEBHOOK] Race condition detected for {payment.id} — already processed by another request", flush=True)
+            return {"status": "ok", "message": "Already processed"}
+
+        # ── ATOMIC INCREMENT tokens (SQL-level, bukan Python read-modify-write) ──
+        db.execute(
+            update(User)
+            .where(User.id == payment.user_id)
+            .values(tokens_purchased=User.tokens_purchased + payment.tokens_added)
+        )
         db.commit()
-        print(f"[WEBHOOK] ✅ Payment {payment.id} marked PAID — +{payment.tokens_added} tokens for user {user.email}", flush=True)
+        db.refresh(payment)
+        print(f"[WEBHOOK] ✅ Payment {payment.id} marked PAID — +{payment.tokens_added} tokens for user_id={payment.user_id}", flush=True)
 
-    # Push status ke SSE queue jika ada client yang sedang mendengarkan
+    # ── Push status ke SSE queue ─────────────────────────────────────────────────
     queue = active_connections.get(payment.id)
     if queue:
         await queue.put(sse_status)
         print(f"[WEBHOOK] SSE push sent: {sse_status}", flush=True)
     else:
-        print(f"[WEBHOOK] No active SSE connection for payment {payment.id} (polling will pick it up)", flush=True)
+        print(f"[WEBHOOK] No active SSE connection for {payment.id} (polling will pick it up)", flush=True)
 
-    return {"status": "success", "message": f"Berhasil menambahkan {payment.tokens_added} token"}
+    return {"status": "success", "message": f"Berhasil memproses {payment.tokens_added} token"}
 
 @app.get("/api/payments/history")
 async def api_payment_history(

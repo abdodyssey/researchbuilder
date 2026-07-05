@@ -13,7 +13,7 @@ Balance = tokens_purchased - tokens_used.
 
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -54,7 +54,7 @@ class Payment(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    mayar_payment_id = Column(String, nullable=True)
+    mayar_payment_id = Column(String, nullable=True, unique=True, index=True)  # unique: cegah double-process webhook retry
     package_key = Column(String, nullable=True)
     tokens_added = Column(Integer, default=0)
     amount = Column(Integer, nullable=False)
