@@ -693,8 +693,16 @@ async def create_payment_link(
                 raise HTTPException(status_code=502, detail=f"Mayar QRIS API error: {resp.text}")
             data = resp.json().get("data", {})
             qr_url = data.get("url")
+            mayar_product_id = data.get("id")  # ID produk QRIS dari Mayar → untuk matching webhook
             if not qr_url:
                 raise HTTPException(status_code=502, detail="Mayar QRIS response missing QR URL")
+
+            # Simpan Mayar product ID agar webhook bisa match dengan akurat
+            if mayar_product_id:
+                payment.mayar_payment_id = mayar_product_id
+                db.commit()
+
+            print(f"[PAYMENT] Created QRIS — payment_id={payment.id} | mayar_product_id={mayar_product_id}", flush=True)
 
             return {
                 "payment_id": payment.id,
@@ -830,20 +838,34 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
     # ── Cari payment yang cocok ─────────────────────────────────────────────────
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30)
 
-    # 1. Prioritas: match by mayar_txn_id (paling akurat)
     payment = None
-    if mayar_txn_id:
+
+    # 1. Match by productId (paling akurat — disimpan saat QRIS dibuat)
+    product_id_from_webhook = data.get("productId")
+    if product_id_from_webhook:
+        payment = db.query(Payment).filter(
+            Payment.mayar_payment_id == product_id_from_webhook,
+        ).first()
+        if payment:
+            print(f"[WEBHOOK] Matched by productId={product_id_from_webhook}", flush=True)
+
+    # 2. Match by transactionId (jika productId tidak ada)
+    if not payment and mayar_txn_id:
         payment = db.query(Payment).filter(
             Payment.mayar_payment_id == mayar_txn_id,
         ).first()
+        if payment:
+            print(f"[WEBHOOK] Matched by mayar_txn_id={mayar_txn_id}", flush=True)
 
-    # 2. Fallback: match by amount (dalam 30 menit terakhir)
+    # 3. Fallback: match by amount + waktu (kurang akurat, hanya jika tidak ada cara lain)
     if not payment:
         payment = db.query(Payment).filter(
             Payment.status == "pending",
             Payment.amount == amount,
             Payment.created_at >= cutoff,
-        ).order_by(Payment.created_at.asc()).first()
+        ).order_by(Payment.created_at.desc()).first()  # desc = ambil yang TERBARU
+        if payment:
+            print(f"[WEBHOOK] Matched by amount fallback (newest pending) — payment_id={payment.id}", flush=True)
 
     if not payment:
         print(f"[WEBHOOK] No matching payment found for amount={amount} | txn_id={mayar_txn_id}", flush=True)
