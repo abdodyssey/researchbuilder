@@ -40,35 +40,53 @@ export function QrisCheckout({
     };
   }, []);
 
-  // ── SSE: koneksi real-time ke backend, menggantikan polling setiap 5 detik ──
+  // ── Hybrid: SSE (real-time push) + polling fallback (3 detik) ──────────────
+  // SSE lewat ngrok sering putus (timeout koneksi), sehingga polling sebagai
+  // safety net agar status pembayaran tetap terdeteksi walau SSE gagal.
   useEffect(() => {
     if (status !== "pending" || mock) return;
 
-    // EventSource tidak mendukung custom header secara native,
-    // sehingga kita kirim token sebagai query param dan backend memvalidasinya.
+    let settled = false;
+
+    const resolve = (newStatus: Status) => {
+      if (settled) return;
+      settled = true;
+      setStatus(newStatus);
+    };
+
+    // ── 1. SSE (jika berhasil terhubung, event masuk instan) ──
     const currentToken = token || localStorage.getItem("token");
-    const url = `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/payment-stream/${paymentId}?token=${currentToken}&ngrok-skip-browser-warning=true`;
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    const sseUrl = `${apiBase}/api/payment-stream/${paymentId}?token=${currentToken}&ngrok-skip-browser-warning=true`;
 
-    const eventSource = new EventSource(url);
-
+    const eventSource = new EventSource(sseUrl);
     eventSource.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        if (data.status === "success") {
-          setStatus("paid");
-        } else if (data.status === "cancel" || data.status === "expired") {
-          setStatus("expired");
+        if (data.status === "success") resolve("paid");
+        else if (data.status === "cancel" || data.status === "expired") resolve("expired");
+      } catch { /* ignore */ }
+      eventSource.close();
+    };
+    // Jika SSE putus → biarkan polling yang mengambil alih (jangan tutup polling)
+    eventSource.onerror = () => eventSource.close();
+
+    // ── 2. Polling setiap 3 detik sebagai fallback ──
+    const interval = setInterval(async () => {
+      try {
+        const res = await authFetch(`/api/payment/${paymentId}/status`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === "paid") resolve("paid");
+          else if (data.status === "expired") resolve("expired");
         }
-      } catch { /* ignore parse errors */ }
-      eventSource.close();
-    };
+      } catch { /* ignore */ }
+    }, 3000);
 
-    eventSource.onerror = () => {
-      // Koneksi terputus secara tak terduga — tutup agar tidak retry terus-menerus
+    return () => {
       eventSource.close();
+      clearInterval(interval);
     };
-
-    return () => eventSource.close();
   }, [status, paymentId, mock, token]);
 
   useEffect(() => {
