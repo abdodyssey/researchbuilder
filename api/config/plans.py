@@ -6,7 +6,7 @@ Semua fitur terbuka untuk semua user — gating hanya berdasarkan saldo token.
 """
 
 TOKEN_PACKAGES = {
-    "starter": {"tokens": 1000, "price": 1, "label": "Starter"},
+    "starter": {"tokens": 300000, "price": 1000, "label": "Starter"},
     "standard": {"tokens": 200000, "price": 75000, "label": "Standard"},
     "bulk": {"tokens": 500000, "price": 150000, "label": "Bulk"},
 }
