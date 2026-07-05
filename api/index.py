@@ -44,7 +44,7 @@ from utils.state_manager import load_state, STATE_FILE, PipelineState
 from sqlalchemy.orm import Session
 from sqlalchemy import update
 from database import get_db, init_db
-from models import User, Payment
+from models import User
 from auth import get_current_user, check_token_limit, decode_token
 from config.plans import get_package, TOKEN_PACKAGES, FREE_TOKENS, MAX_REFS
 
@@ -64,8 +64,7 @@ app.add_middleware(
 )
 
 # Direktori output untuk menyimpan hasil pipeline (JSON state, markdown, docx).
-# Di Vercel menggunakan /tmp karena serverless tidak punya persistent disk.
-OUTPUT_DIR = "/tmp" if os.environ.get("VERCEL") else os.getenv("OUTPUT_DIR", "./output")
+OUTPUT_DIR = os.getenv("OUTPUT_DIR", "./output")
 Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 Path(os.path.join(OUTPUT_DIR, "runs")).mkdir(parents=True, exist_ok=True)
 
@@ -333,29 +332,14 @@ async def api_runs(current_user: User = Depends(get_current_user)):
 async def api_download_file(
     pipeline_id: str,
     filename: str,
-    request: Request,
-    token: Optional[str] = None,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
 ):
-    token_str = token
-    if not token_str:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token_str = auth_header.split(" ")[1]
-            
-    if not token_str:
-        raise HTTPException(status_code=401, detail="Token required")
-        
-    user_id = decode_token(token_str)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
-        
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
+    """
+    Download file hasil pipeline (DOCX atau Markdown).
+    Autentikasi via Authorization header — token tidak pernah ada di URL.
+    """
     state = load_state(OUTPUT_DIR, pipeline_id)
-    if state and state.user_id is not None and state.user_id != user.id:
+    if state and state.user_id is not None and state.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Akses ditolak ke dokumen ini")
 
     if filename.endswith(".docx") or filename == "docx":
@@ -404,8 +388,8 @@ async def api_get_content(pipeline_id: str, current_user: User = Depends(get_cur
     }
 
 @app.post("/api/clean")
-async def api_clean():
-    # Delete active files in output directory root to start fresh
+async def api_clean(current_user: User = Depends(get_current_user)):
+    """Hapus file output aktif. Hanya user terautentikasi yang bisa memanggil ini."""
     for f in ["draft_article.md", "draft_article.docx", "references.md", "pipeline_state.json"]:
         p = Path(OUTPUT_DIR) / f
         if p.exists():
@@ -574,18 +558,18 @@ async def api_export_docx(
 
     return response
 
-from pydantic import BaseModel as PydanticBase
+from pydantic import BaseModel as PydanticBase, EmailStr, Field
 from auth import hash_password, verify_password, create_access_token
 
 init_db()
 
 class RegisterRequest(PydanticBase):
-    email: str
-    password: str
+    email: EmailStr                              # validasi format email di backend
+    password: str = Field(min_length=8)         # minimal 8 karakter
     full_name: str = ""
 
 class LoginRequest(PydanticBase):
-    email: str
+    email: EmailStr
     password: str
 
 @app.post("/api/auth/register")
@@ -625,338 +609,9 @@ async def api_me(current_user: User = Depends(get_current_user)):
     }
 
 # ── Payment & Webhook Endpoints ────────────────────────────────────────────────
-import asyncio
-import httpx
-from models import Payment
-from fastapi import Request
-from fastapi.responses import StreamingResponse
-
-# Kamus SSE: payment_id → asyncio.Queue yang menunggu event dari webhook Mayar.
-active_connections: dict[str, asyncio.Queue] = {}
-
-class PaymentCreateRequest(PydanticBase):
-    package: str
-
-@app.post("/api/payment/create")
-async def create_payment_link(
-    req: PaymentCreateRequest,
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    pkg = get_package(req.package)
-    if not pkg:
-        raise HTTPException(status_code=400, detail="Paket tidak valid")
-
-    amount = pkg["price"]
-    tokens = pkg["tokens"]
-    label = pkg["label"]
-
-    payment = Payment(
-        user_id=current_user.id,
-        package_key=req.package,
-        tokens_added=tokens,
-        amount=amount,
-        status="pending"
-    )
-    db.add(payment)
-    db.commit()
-    db.refresh(payment)
-
-    mayar_api_key = os.getenv("MAYAR_API_KEY")
-
-    if not mayar_api_key:
-        payment.status = "paid"
-        current_user.tokens_purchased += tokens
-        db.commit()
-        return {
-            "payment_id": payment.id,
-            "qr_url": None,
-            "amount": amount,
-            "package_label": label,
-            "tokens": tokens,
-            "mock": True,
-        }
-
-    try:
-        headers = {
-            "Authorization": f"Bearer {mayar_api_key}",
-            "Content-Type": "application/json",
-        }
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://api.mayar.id/hl/v1/qrcode/create",
-                json={"amount": amount},
-                headers=headers,
-                timeout=15.0,
-            )
-            if resp.status_code != 200:
-                raise HTTPException(status_code=502, detail=f"Mayar QRIS API error: {resp.text}")
-            data = resp.json().get("data", {})
-            qr_url = data.get("url")
-            mayar_product_id = data.get("id")  # ID produk QRIS dari Mayar → untuk matching webhook
-            if not qr_url:
-                raise HTTPException(status_code=502, detail="Mayar QRIS response missing QR URL")
-
-            # Simpan Mayar product ID agar webhook bisa match dengan akurat
-            if mayar_product_id:
-                payment.mayar_payment_id = mayar_product_id
-                db.commit()
-
-            print(f"[PAYMENT] Created QRIS — payment_id={payment.id} | mayar_product_id={mayar_product_id}", flush=True)
-
-            return {
-                "payment_id": payment.id,
-                "qr_url": qr_url,
-                "amount": amount,
-                "package_label": label,
-                "tokens": tokens,
-            }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error membuat QRIS: {str(e)}")
-
-@app.get("/api/payment/{payment_id}/status")
-async def payment_status(
-    payment_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    payment = db.query(Payment).filter(
-        Payment.id == payment_id,
-        Payment.user_id == current_user.id,
-    ).first()
-    if not payment:
-        raise HTTPException(status_code=404, detail="Payment not found")
-
-    # Auto-expire: QRIS Mayar berlaku 15 menit (frontend timer) + 1 menit buffer
-    if payment.status == "pending" and payment.created_at:
-        age = (datetime.now(timezone.utc).replace(tzinfo=None) - payment.created_at).total_seconds()
-        if age > 960:  # 16 menit
-            db.execute(
-                update(Payment)
-                .where(Payment.id == payment.id, Payment.status == "pending")
-                .values(status="expired")
-            )
-            db.commit()
-            db.refresh(payment)
-
-    return {
-        "status": payment.status,
-        "tokens_added": payment.tokens_added,
-    }
-
-@app.get("/api/payment-stream/{payment_id}")
-async def payment_stream(
-    payment_id: str,
-    token: str,           # Dikirim via query param karena EventSource tidak support custom header
-    db: Session = Depends(get_db),
-):
-    """SSE endpoint — client membuka koneksi ini lalu menunggu push dari webhook Mayar."""
-    # Autentikasi manual via query param (EventSource tidak bisa kirim Authorization header)
-    user_id = decode_token(token)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Token tidak valid")
-
-    payment = db.query(Payment).filter(
-        Payment.id == payment_id,
-        Payment.user_id == user_id,
-    ).first()
-    if not payment:
-        raise HTTPException(status_code=404, detail="Payment not found")
-
-    queue: asyncio.Queue = asyncio.Queue()
-    active_connections[payment_id] = queue
-
-    async def event_generator():
-        try:
-            # Batas waktu tunggu: 16 menit (sedikit lebih dari timer frontend 15 menit)
-            status = await asyncio.wait_for(queue.get(), timeout=960)
-            yield f"data: {json.dumps({'status': status})}\n\n"
-        except asyncio.TimeoutError:
-            yield f"data: {json.dumps({'status': 'expired'})}\n\n"
-        finally:
-            active_connections.pop(payment_id, None)
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # Matikan buffering Nginx agar SSE real-time
-        },
-    )
-
-@app.post("/api/webhook/mayar")
-async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
-    body = await request.body()
-
-    signature = request.headers.get("x-mayar-signature")
-    webhook_secret = os.getenv("MAYAR_WEBHOOK_SECRET")
-
-    is_mock = request.headers.get("x-mock-payment") == "true"
-    mayar_api_key = os.getenv("MAYAR_API_KEY")
-    allow_mock = is_mock and not mayar_api_key
-
-    # ── Log semua incoming webhook untuk debugging ──────────────────────────────
-    try:
-        payload_preview = json.loads(body)
-    except Exception:
-        payload_preview = {}
-    print(f"[WEBHOOK] Received — event={payload_preview.get('event')} | headers={dict(request.headers)} | body={body[:500]}", flush=True)
-
-    # ── Verifikasi signature (log warning jika gagal, jangan reject dulu ───────
-    if webhook_secret and not allow_mock:
-        if not signature:
-            print("[WEBHOOK] WARNING: Missing x-mayar-signature header — dilanjutkan untuk debug", flush=True)
-        else:
-            expected_sig = hmac.new(
-                webhook_secret.encode(),
-                body,
-                hashlib.sha256
-            ).hexdigest()
-            if not hmac.compare_digest(expected_sig, signature):
-                print(f"[WEBHOOK] WARNING: Signature mismatch — expected={expected_sig} | got={signature}", flush=True)
-                # NOTE: Uncomment baris di bawah jika sudah yakin signature benar:
-                # raise HTTPException(status_code=400, detail="Invalid signature")
-            else:
-                print("[WEBHOOK] Signature valid ✓", flush=True)
-
-    try:
-        payload = json.loads(body)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
-
-    event = payload.get("event", "")
-    data = payload.get("data", {})
-
-    # Mayar QRIS bisa kirim amount dalam cents atau rupiah — ambil keduanya
-    amount = data.get("amount", 0) or data.get("grossAmount", 0)
-    mayar_txn_id = (
-        data.get("id")
-        or data.get("transactionId")
-        or data.get("paymentId")
-        or data.get("referenceId")
-    )
-
-    print(f"[WEBHOOK] event={event!r} | amount={amount} | mayar_txn_id={mayar_txn_id} | data_keys={list(data.keys())}", flush=True)
-
-    # ── Cari payment yang cocok ─────────────────────────────────────────────────
-    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30)
-
-    payment = None
-
-    # 1. Match by productId (paling akurat — disimpan saat QRIS dibuat)
-    product_id_from_webhook = data.get("productId")
-    if product_id_from_webhook:
-        payment = db.query(Payment).filter(
-            Payment.mayar_payment_id == product_id_from_webhook,
-        ).first()
-        if payment:
-            print(f"[WEBHOOK] Matched by productId={product_id_from_webhook}", flush=True)
-
-    # 2. Match by transactionId (jika productId tidak ada)
-    if not payment and mayar_txn_id:
-        payment = db.query(Payment).filter(
-            Payment.mayar_payment_id == mayar_txn_id,
-        ).first()
-        if payment:
-            print(f"[WEBHOOK] Matched by mayar_txn_id={mayar_txn_id}", flush=True)
-
-    # 3. Fallback: match by amount + waktu (kurang akurat, hanya jika tidak ada cara lain)
-    if not payment:
-        payment = db.query(Payment).filter(
-            Payment.status == "pending",
-            Payment.amount == amount,
-            Payment.created_at >= cutoff,
-        ).order_by(Payment.created_at.desc()).first()  # desc = ambil yang TERBARU
-        if payment:
-            print(f"[WEBHOOK] Matched by amount fallback (newest pending) — payment_id={payment.id}", flush=True)
-
-    if not payment:
-        print(f"[WEBHOOK] No matching payment found for amount={amount} | txn_id={mayar_txn_id}", flush=True)
-        return {"status": "ok", "message": "No matching pending payment found"}
-
-    print(f"[WEBHOOK] Matched payment_id={payment.id} | current_status={payment.status}", flush=True)
-
-    # ── Whitelist event: hanya proses event pembayaran yang valid ───────────────
-    VALID_SUCCESS_EVENTS = {"payment.received", "payment.success", "payment.paid", ""}
-    VALID_CANCEL_EVENTS  = {"payment.failed", "payment.cancelled"}
-
-    if event in VALID_CANCEL_EVENTS:
-        sse_status = "cancel"
-    elif event in VALID_SUCCESS_EVENTS:
-        sse_status = "success"
-    else:
-        # Event tidak dikenal (mis. payment.updated, payment.refunded) — abaikan
-        print(f"[WEBHOOK] Ignoring unhandled event={event!r}", flush=True)
-        return {"status": "ok", "message": f"Event {event!r} not handled"}
-
-    # ── Early return jika sudah diproses (idempotency) ───────────────────────────
-    if payment.status == "paid":
-        print(f"[WEBHOOK] Payment {payment.id} already PAID — skipping (idempotent)", flush=True)
-        return {"status": "ok", "message": "Already processed"}
-
-    if sse_status == "success":
-        # ── ATOMIC UPDATE: hanya 1 request yang bisa ubah status pending→paid ──
-        # Jika ada 2 webhook Mayar bersamaan (retry), hanya 1 yang akan succeed.
-        rows_updated = db.execute(
-            update(Payment)
-            .where(Payment.id == payment.id, Payment.status == "pending")
-            .values(
-                status="paid",
-                mayar_payment_id=mayar_txn_id or payment.mayar_payment_id,
-            )
-        ).rowcount
-
-        if rows_updated == 0:
-            # Kondisi race: request lain sudah lebih dulu proses payment ini
-            print(f"[WEBHOOK] Race condition detected for {payment.id} — already processed by another request", flush=True)
-            return {"status": "ok", "message": "Already processed"}
-
-        # ── ATOMIC INCREMENT tokens (SQL-level, bukan Python read-modify-write) ──
-        db.execute(
-            update(User)
-            .where(User.id == payment.user_id)
-            .values(tokens_purchased=User.tokens_purchased + payment.tokens_added)
-        )
-        db.commit()
-        db.refresh(payment)
-        print(f"[WEBHOOK] ✅ Payment {payment.id} marked PAID — +{payment.tokens_added} tokens for user_id={payment.user_id}", flush=True)
-
-    # ── Push status ke SSE queue ─────────────────────────────────────────────────
-    queue = active_connections.get(payment.id)
-    if queue:
-        await queue.put(sse_status)
-        print(f"[WEBHOOK] SSE push sent: {sse_status}", flush=True)
-    else:
-        print(f"[WEBHOOK] No active SSE connection for {payment.id} (polling will pick it up)", flush=True)
-
-    return {"status": "success", "message": f"Berhasil memproses {payment.tokens_added} token"}
-
-@app.get("/api/payments/history")
-async def api_payment_history(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    payments = (
-        db.query(Payment)
-        .filter(Payment.user_id == current_user.id, Payment.status == "paid")
-        .order_by(Payment.created_at.desc())
-        .limit(20)
-        .all()
-    )
-    return [
-        {
-            "id": p.id[:8],
-            "tokens_added": p.tokens_added,
-            "amount": p.amount,
-            "status": p.status,
-            "created_at": p.created_at.isoformat() if p.created_at else None,
-        }
-        for p in payments
-    ]
+# Semua logika payment dikelola di routers/payment.py agar mudah dimaintain.
+from routers.payment import router as payment_router
+app.include_router(payment_router)
 
 
 # ── Interactive Research Wizard Endpoints ─────────────────────────────────────

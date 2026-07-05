@@ -27,6 +27,24 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
+/** Helper untuk menerjemahkan error 422 Pydantic (Bahasa Inggris) ke Bahasa Indonesia */
+function parseValidationError(errObj: any): string {
+  const msg = errObj.msg || "";
+  const type = errObj.type || "";
+  const msgLower = msg.toLowerCase();
+
+  if (type.includes("email") || msgLower.includes("email")) {
+    return "Format alamat email tidak valid.";
+  }
+  if (type.includes("too_short") || msgLower.includes("at least 8 characters")) {
+    return "Kata sandi harus terdiri dari minimal 8 karakter.";
+  }
+  if (type === "missing" || msgLower.includes("required")) {
+    return "Terdapat kolom wajib yang belum diisi.";
+  }
+  return "Data yang Anda masukkan tidak valid, mohon periksa kembali.";
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -35,8 +53,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    console.log("AuthContext: Using API_URL =", API_URL);
-    // Load token from localStorage
     const savedToken = localStorage.getItem("token");
     if (savedToken) {
       setToken(savedToken);
@@ -93,13 +109,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      throw new Error(data.detail || "Gagal masuk");
+      let errMsg = "Gagal masuk";
+      if (typeof data.detail === "string") {
+        errMsg = data.detail;
+      } else if (Array.isArray(data.detail) && data.detail.length > 0) {
+        errMsg = parseValidationError(data.detail[0]); // Format Pydantic 422 Validation Error
+      }
+      throw new Error(errMsg);
     }
 
     const data = await response.json();
     localStorage.setItem("token", data.token);
     setToken(data.token);
-    setUser(data.user);
     await fetchUserProfile(data.token);
     router.push("/");
   }
@@ -125,13 +146,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      throw new Error(data.detail || "Gagal mendaftar");
+      let errMsg = "Gagal mendaftar";
+      if (typeof data.detail === "string") {
+        errMsg = data.detail;
+      } else if (Array.isArray(data.detail) && data.detail.length > 0) {
+        errMsg = parseValidationError(data.detail[0]); // Format Pydantic 422 Validation Error
+      }
+      throw new Error(errMsg);
     }
 
     const data = await response.json();
     localStorage.setItem("token", data.token);
     setToken(data.token);
-    setUser(data.user);
     await fetchUserProfile(data.token);
     router.push("/");
   }

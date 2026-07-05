@@ -6,9 +6,10 @@ Semua fitur terbuka untuk semua user — gating hanya berdasarkan saldo token.
 """
 
 TOKEN_PACKAGES = {
-    "starter": {"tokens": 300000, "price": 1000, "label": "Starter"},
-    "standard": {"tokens": 200000, "price": 75000, "label": "Standard"},
-    "bulk": {"tokens": 500000, "price": 150000, "label": "Bulk"},
+    #                  tokens   price (IDR)   price/1k tokens
+    "starter":  {"tokens":  50_000, "price":  15_000, "label": "Starter"},   # Rp 300 / 1k token
+    "standard": {"tokens": 200_000, "price":  50_000, "label": "Standard"},  # Rp 250 / 1k token  ← terpopuler
+    "bulk":     {"tokens": 600_000, "price": 120_000, "label": "Bulk"},      # Rp 200 / 1k token  ← terbaik
 }
 
 FREE_TOKENS = 10000

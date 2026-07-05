@@ -33,11 +33,13 @@ class User(Base):
     tokens_purchased = Column(Integer, default=0)
     tokens_used = Column(Integer, default=0)
 
-    # Legacy columns kept for SQLite compat — not used by app logic
-    plan = Column(String, default="active")
-    tokens_reset_at = Column(DateTime, nullable=True)
-    trial_started_at = Column(DateTime, nullable=True)
-    trial_ends_at = Column(DateTime, nullable=True)
+    # Kolom-kolom berikut tidak lagi digunakan oleh logika bisnis (PAYG token-based).
+    # Tetap ada karena SQLite < 3.35 tidak mendukung DROP COLUMN.
+    # Jika migrasi ke PostgreSQL: hapus kolom ini via Alembic migration.
+    plan             = Column(String,   default="active")  # ex-subscription plan
+    tokens_reset_at  = Column(DateTime, nullable=True)     # ex-monthly reset
+    trial_started_at = Column(DateTime, nullable=True)     # ex-trial feature
+    trial_ends_at    = Column(DateTime, nullable=True)     # ex-trial feature
 
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utcnow)
@@ -61,7 +63,8 @@ class Payment(Base):
     status = Column(String, default="pending")  # pending | paid | expired
     created_at = Column(DateTime, default=utcnow)
 
-    # Legacy column — not used by app logic
-    plan = Column(String, nullable=True)
+    # Kolom ini tidak lagi digunakan. Tetap ada karena SQLite tidak support DROP COLUMN.
+    # Hapus via Alembic migration saat pindah ke PostgreSQL.
+    plan = Column(String, nullable=True)  # ex-subscription plan
 
     user = relationship("User", back_populates="payments")

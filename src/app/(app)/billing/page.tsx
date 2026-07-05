@@ -19,9 +19,30 @@ import { useApiQuery } from "@/hooks/useApiQuery";
 import { QrisCheckout } from "@/components/QrisCheckout";
 
 const TOKEN_PACKAGES = [
-  { key: "starter", label: "Starter", tokens: 300000, price: 1000, desc: "Untuk mencoba fitur utama" },
-  { key: "standard", label: "Standard", tokens: 200000, price: 75000, desc: "Untuk penulisan reguler" },
-  { key: "bulk", label: "Bulk", tokens: 500000, price: 150000, desc: "Untuk penggunaan intensif" },
+  {
+    key: "starter",
+    label: "Starter",
+    tokens: 50000,
+    price: 15000,
+    desc: "Untuk mencoba fitur utama",
+    perToken: "Rp 300 / 1k token",
+  },
+  {
+    key: "standard",
+    label: "Standard",
+    tokens: 200000,
+    price: 50000,
+    desc: "Untuk penulisan reguler",
+    perToken: "Rp 250 / 1k token",
+  },
+  {
+    key: "bulk",
+    label: "Bulk",
+    tokens: 600000,
+    price: 120000,
+    desc: "Untuk penggunaan intensif",
+    perToken: "Rp 200 / 1k token",
+  },
 ];
 
 interface Invoice {
@@ -61,6 +82,7 @@ function formatDateShort(iso: string | null): string {
 export default function BillingPage() {
   const { user, authFetch, refreshProfile } = useAuth();
   const [buying, setBuying] = useState<string | null>(null);
+  const [buyError, setBuyError] = useState<string | null>(null);
   const [qrisData, setQrisData] = useState<{
     paymentId: string;
     qrUrl: string | null;
@@ -79,6 +101,7 @@ export default function BillingPage() {
   async function handleBuy(packageKey: string) {
     if (!user) return;
     setBuying(packageKey);
+    setBuyError(null);
     try {
       const resp = await authFetch("/api/payment/create", {
         method: "POST",
@@ -95,9 +118,19 @@ export default function BillingPage() {
           tokens: data.tokens,
           mock: data.mock,
         });
+      } else {
+        // Handle HTTP error dari backend (400, 500, 502, dsb.)
+        let errMsg = "Gagal membuat transaksi. Coba lagi beberapa saat.";
+        try {
+          const errData = await resp.json();
+          if (errData.detail) errMsg = errData.detail;
+        } catch { /* pakai pesan default */ }
+        setBuyError(errMsg);
       }
     } catch (e) {
-      console.error(e);
+      // Handle network error (backend VPS tidak bisa dijangkau)
+      const msg = e instanceof Error ? e.message : "Server tidak dapat dijangkau.";
+      setBuyError(msg);
     } finally {
       setBuying(null);
     }
@@ -181,6 +214,14 @@ export default function BillingPage() {
           </div>
         </div>
 
+        {/* Error banner */}
+        {buyError && (
+          <div className="mb-4 p-3 bg-status-error/8 border border-status-error/25 rounded-lg flex items-start gap-2 text-[11px] text-status-error">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>{buyError}</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {TOKEN_PACKAGES.map((pkg, i) => (
             <Card key={pkg.key} className={`flex flex-col justify-between ${i === 1 ? "border-primary/40" : "border-border-color"}`}>
@@ -200,6 +241,7 @@ export default function BillingPage() {
                 <p className="text-xs text-text-secondary mt-1">
                   {pkg.tokens.toLocaleString()} token
                 </p>
+                <p className="text-[10px] text-text-muted mt-0.5">{pkg.perToken}</p>
               </div>
               <Button
                 size="sm"
