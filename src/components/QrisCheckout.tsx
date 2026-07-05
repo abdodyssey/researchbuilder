@@ -29,7 +29,7 @@ export function QrisCheckout({
   onComplete,
   onClose,
 }: QrisCheckoutProps) {
-  const { authFetch } = useAuth();
+  const { authFetch, token } = useAuth();
   const [status, setStatus] = useState<Status>(mock ? "paid" : "pending");
   const [secondsLeft, setSecondsLeft] = useState(15 * 60);
 
@@ -40,27 +40,36 @@ export function QrisCheckout({
     };
   }, []);
 
+  // ── SSE: koneksi real-time ke backend, menggantikan polling setiap 5 detik ──
   useEffect(() => {
-    if (status !== "pending") return;
+    if (status !== "pending" || mock) return;
 
-    const interval = setInterval(async () => {
+    // EventSource tidak mendukung custom header secara native,
+    // sehingga kita kirim token sebagai query param dan backend memvalidasinya.
+    const currentToken = token || localStorage.getItem("token");
+    const url = `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/payment-stream/${paymentId}?token=${currentToken}&ngrok-skip-browser-warning=true`;
+
+    const eventSource = new EventSource(url);
+
+    eventSource.onmessage = (e) => {
       try {
-        const res = await authFetch(`/api/payment/${paymentId}/status`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.status === "paid") {
-            setStatus("paid");
-          } else if (data.status === "expired") {
-            setStatus("expired");
-          }
+        const data = JSON.parse(e.data);
+        if (data.status === "success") {
+          setStatus("paid");
+        } else if (data.status === "cancel" || data.status === "expired") {
+          setStatus("expired");
         }
-      } catch {
-        // ignore transient errors
-      }
-    }, 5000);
+      } catch { /* ignore parse errors */ }
+      eventSource.close();
+    };
 
-    return () => clearInterval(interval);
-  }, [status, paymentId]);
+    eventSource.onerror = () => {
+      // Koneksi terputus secara tak terduga — tutup agar tidak retry terus-menerus
+      eventSource.close();
+    };
+
+    return () => eventSource.close();
+  }, [status, paymentId, mock, token]);
 
   useEffect(() => {
     if (status !== "pending") return;

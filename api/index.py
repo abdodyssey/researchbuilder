@@ -624,9 +624,14 @@ async def api_me(current_user: User = Depends(get_current_user)):
     }
 
 # ── Payment & Webhook Endpoints ────────────────────────────────────────────────
+import asyncio
 import httpx
 from models import Payment
 from fastapi import Request
+from fastapi.responses import StreamingResponse
+
+# Kamus SSE: payment_id → asyncio.Queue yang menunggu event dari webhook Mayar.
+active_connections: dict[str, asyncio.Queue] = {}
 
 class PaymentCreateRequest(PydanticBase):
     package: str
@@ -727,6 +732,47 @@ async def payment_status(
         "tokens_added": payment.tokens_added,
     }
 
+@app.get("/api/payment-stream/{payment_id}")
+async def payment_stream(
+    payment_id: str,
+    token: str,           # Dikirim via query param karena EventSource tidak support custom header
+    db: Session = Depends(get_db),
+):
+    """SSE endpoint — client membuka koneksi ini lalu menunggu push dari webhook Mayar."""
+    # Autentikasi manual via query param (EventSource tidak bisa kirim Authorization header)
+    user_id = decode_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token tidak valid")
+
+    payment = db.query(Payment).filter(
+        Payment.id == payment_id,
+        Payment.user_id == user_id,
+    ).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+
+    queue: asyncio.Queue = asyncio.Queue()
+    active_connections[payment_id] = queue
+
+    async def event_generator():
+        try:
+            # Batas waktu tunggu: 16 menit (sedikit lebih dari timer frontend 15 menit)
+            status = await asyncio.wait_for(queue.get(), timeout=960)
+            yield f"data: {json.dumps({'status': status})}\n\n"
+        except asyncio.TimeoutError:
+            yield f"data: {json.dumps({'status': 'expired'})}\n\n"
+        finally:
+            active_connections.pop(payment_id, None)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # Matikan buffering Nginx agar SSE real-time
+        },
+    )
+
 @app.post("/api/webhook/mayar")
 async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
     body = await request.body()
@@ -771,13 +817,26 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
     if not payment:
         return {"status": "ok", "message": "No matching pending payment found"}
 
-    if payment.status != "paid":
+    event = payload.get("event", "")
+
+    # Tentukan status SSE berdasarkan event Mayar
+    if event in ("payment.failed", "payment.cancelled"):
+        sse_status = "cancel"
+    else:
+        sse_status = "success"
+
+    if payment.status != "paid" and sse_status == "success":
         payment.status = "paid"
         if mayar_txn_id:
             payment.mayar_payment_id = mayar_txn_id
         user = payment.user
         user.tokens_purchased += payment.tokens_added
         db.commit()
+
+    # Push status ke SSE queue jika ada client yang sedang mendengarkan
+    queue = active_connections.get(payment.id)
+    if queue:
+        await queue.put(sse_status)
 
     return {"status": "success", "message": f"Berhasil menambahkan {payment.tokens_added} token"}
 
