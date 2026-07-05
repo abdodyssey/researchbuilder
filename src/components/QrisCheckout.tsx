@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/context/AuthContext";
-import { X, Loader2, CheckCircle2, AlertCircle, QrCode, Download } from "lucide-react";
+import { X, Loader2, CheckCircle2, AlertCircle, XCircle, QrCode, Download } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface QrisCheckoutProps {
@@ -17,7 +17,7 @@ interface QrisCheckoutProps {
   onClose: () => void;
 }
 
-type Status = "pending" | "paid" | "expired";
+type Status = "pending" | "paid" | "expired" | "cancelled";
 
 export function QrisCheckout({
   paymentId,
@@ -205,7 +205,7 @@ export function QrisCheckout({
                 </span>
               </div>
 
-              <Button variant="secondary" size="sm" onClick={onClose} className="w-full">
+              <Button variant="secondary" size="sm" onClick={() => setStatus("cancelled")} className="w-full">
                 Batalkan Pembayaran
               </Button>
             </>
@@ -232,13 +232,26 @@ export function QrisCheckout({
           )}
 
           {status === "expired" && (
-            <div className="py-8 flex flex-col items-center gap-3">
+            <div className="py-8 flex flex-col items-center gap-3 w-full">
               <AlertCircle className="w-12 h-12 text-status-error" />
               <p className="text-sm font-bold text-text-primary">QR Kedaluwarsa</p>
               <p className="text-xs text-text-muted text-center">
                 Waktu pembayaran telah habis. Silakan coba lagi.
               </p>
-              <Button variant="secondary" size="sm" onClick={onClose} className="mt-2">
+              <Button variant="secondary" size="sm" onClick={onClose} className="w-full mt-2">
+                Tutup
+              </Button>
+            </div>
+          )}
+
+          {status === "cancelled" && (
+            <div className="py-8 flex flex-col items-center gap-3 w-full">
+              <XCircle className="w-12 h-12 text-text-muted" />
+              <p className="text-sm font-bold text-text-primary">Pembayaran Dibatalkan</p>
+              <p className="text-xs text-text-muted text-center">
+                Transaksi QRIS ini tidak dilanjutkan. Token tidak ditambahkan.
+              </p>
+              <Button variant="secondary" size="sm" onClick={onClose} className="w-full mt-2">
                 Tutup
               </Button>
             </div>
