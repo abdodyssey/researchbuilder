@@ -27,9 +27,9 @@ jobs:
             export PATH="$HOME/.local/bin:$PATH"
             cd ~/researchbuilder
             git pull origin main
-            # Sync deps — pyproject.toml now lives in api/
+            # Sync deps — pyproject.toml & uv.lock ada di api/
             cd api && uv sync && cd ..
-            # Restart via supervisord (installed via uv tool, lives in ~/.local/bin)
+            # Restart via supervisord (installed via: uv tool install supervisor)
             SUPERVISOR_SOCK="$HOME/.config/supervisor/supervisor.sock"
             if [ -S "$SUPERVISOR_SOCK" ]; then
               supervisorctl -c ~/.config/supervisor/supervisord.conf restart researchbuilder
@@ -37,4 +37,4 @@ jobs:
               supervisord -c ~/.config/supervisor/supervisord.conf
             fi
             sleep 3
-            curl -sf http://localhost:9123/ || exit 1
+            curl -sf http://localhost:8000/ || exit 1
