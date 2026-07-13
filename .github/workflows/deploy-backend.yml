@@ -5,8 +5,6 @@ on:
     branches: [main]
     paths:
       - 'api/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
   workflow_dispatch:
 
 concurrency:
@@ -29,13 +27,14 @@ jobs:
             export PATH="$HOME/.local/bin:$PATH"
             cd ~/researchbuilder
             git pull origin main
-            uv sync
-            if [ -f .uvicorn.pid ]; then
-              kill $(cat .uvicorn.pid) 2>/dev/null || true
-              rm -f .uvicorn.pid
-              sleep 2
+            # Sync deps — pyproject.toml now lives in api/
+            cd api && uv sync && cd ..
+            # Restart via supervisord (installed via uv tool, lives in ~/.local/bin)
+            SUPERVISOR_SOCK="$HOME/.config/supervisor/supervisor.sock"
+            if [ -S "$SUPERVISOR_SOCK" ]; then
+              supervisorctl -c ~/.config/supervisor/supervisord.conf restart researchbuilder
+            else
+              supervisord -c ~/.config/supervisor/supervisord.conf
             fi
-            nohup .venv/bin/uvicorn api.index:app --host 0.0.0.0 --port 9123 >> uvicorn.log 2>&1 &
-            echo $! > .uvicorn.pid
             sleep 3
             curl -sf http://localhost:9123/ || exit 1
