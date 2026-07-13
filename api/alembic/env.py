@@ -15,7 +15,10 @@ from alembic import context
 # Ensure api/ is on sys.path so our modules resolve.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+# Load .env — try api/.env first, then fall back to project root .env
+_here = os.path.dirname(__file__)
+load_dotenv(os.path.join(_here, "..", ".env"))        # api/.env
+load_dotenv(os.path.join(_here, "..", "..", ".env"))  # root .env (VPS layout)
 
 config = context.config
 
