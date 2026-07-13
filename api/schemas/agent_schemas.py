@@ -43,6 +43,8 @@ class Reference(BaseModel):
     source_type: Optional[str] = "web"
     author: Optional[str] = "Anonim"
     year: Optional[str] = "2026"
+    citation_count: Optional[int] = 0
+    venue: Optional[str] = ""
 
 class LiteratureSearchInput(BaseModel):
     focused_topic: str

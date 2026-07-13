@@ -35,10 +35,15 @@ def run(inp: SynthesisInput) -> SynthesisOutput:
 Focused topic: "{inp.focused_topic}"
 Research questions: {inp.research_questions}
 
-Referensi:
+Referensi (dengan tahun & jumlah sitasi):
 {refs_text}
 
-Sintesis referensi di atas. Return JSON:
+Sintesis referensi di atas. Manfaatkan metadata tahun & jumlah sitasi untuk menilai
+kebaruan (novelty) dan pengaruh tiap sumber. Untuk research_gaps, dasarkan celah pada
+bukti nyata dari literatur — misalnya keterbatasan yang berulang, area yang kurang diteliti,
+atau isu terkini yang belum tercakup oleh paper-paper bersitasi tinggi.
+
+Return JSON:
 {{
   "key_themes": [
     {{
@@ -49,7 +54,7 @@ Sintesis referensi di atas. Return JSON:
   ],
   "research_gaps": [
     {{
-      "gap_description": "Penjelasan celah penelitian yang ditemukan",
+      "gap_description": "Celah penelitian yang didasarkan pada bukti dari literatur di atas",
       "how_we_address_it": "Bagaimana penelitian kita akan mengisi celah tersebut"
     }}
   ],

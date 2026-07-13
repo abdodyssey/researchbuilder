@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, API_URL } from "@/context/AuthContext";
 import { X, Loader2, CheckCircle2, AlertCircle, XCircle, QrCode, Download } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 
 interface QrisCheckoutProps {
   paymentId: string;
@@ -56,7 +56,7 @@ export function QrisCheckout({
 
     // ── 1. SSE (jika berhasil terhubung, event masuk instan) ──
     const currentToken = token || localStorage.getItem("token");
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    const apiBase = API_URL;
     const sseUrl = `${apiBase}/api/payment-stream/${paymentId}?token=${currentToken}&ngrok-skip-browser-warning=true`;
 
     const eventSource = new EventSource(sseUrl);
@@ -146,7 +146,7 @@ export function QrisCheckout({
       <div className="relative w-full max-w-sm bg-bg-card border border-border-color rounded-xl shadow-xl animate-in fade-in zoom-in-95">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-color">
-          <h3 className="text-sm font-extrabold font-outfit text-text-primary">
+          <h3 className="text-sm font-extrabold text-text-primary">
             Pembayaran QRIS
           </h3>
           <button
@@ -182,10 +182,9 @@ export function QrisCheckout({
                   className="w-52 h-52 object-contain"
                 />
                 <Button
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
                   onClick={downloadQrImage}
-                  className="flex items-center gap-1.5 text-[11px] h-8 py-1"
                 >
                   <Download className="w-3.5 h-3.5" />
                   Unduh QR Code
@@ -205,7 +204,7 @@ export function QrisCheckout({
                 </span>
               </div>
 
-              <Button variant="secondary" size="sm" onClick={() => setStatus("cancelled")} className="w-full">
+              <Button variant="outline" size="sm" onClick={() => setStatus("cancelled")} className="w-full">
                 Batalkan Pembayaran
               </Button>
             </>
@@ -238,7 +237,7 @@ export function QrisCheckout({
               <p className="text-xs text-text-muted text-center">
                 Waktu pembayaran telah habis. Silakan coba lagi.
               </p>
-              <Button variant="secondary" size="sm" onClick={onClose} className="w-full mt-2">
+              <Button variant="outline" size="sm" onClick={onClose} className="w-full mt-2">
                 Tutup
               </Button>
             </div>
@@ -251,7 +250,7 @@ export function QrisCheckout({
               <p className="text-xs text-text-muted text-center">
                 Transaksi QRIS ini tidak dilanjutkan. Token tidak ditambahkan.
               </p>
-              <Button variant="secondary" size="sm" onClick={onClose} className="w-full mt-2">
+              <Button variant="outline" size="sm" onClick={onClose} className="w-full mt-2">
                 Tutup
               </Button>
             </div>

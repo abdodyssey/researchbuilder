@@ -23,10 +23,18 @@ def build_system_prompt(role: str, output_format: str = "JSON") -> str:
 
 
 def refs_to_text(references: list[dict]) -> str:
-    """Format list referensi menjadi teks ringkas (ID + title + snippet + URL)."""
+    """Format list referensi menjadi teks ringkas dengan metadata akademik.
+    Sertakan tahun & jumlah sitasi agar LLM bisa menilai kebaruan & pengaruh
+    tiap sumber saat menganalisis research gap dan novelty."""
     lines = []
     for r in references:
-        lines.append(f"[{r['id']}] {r['title']}\n{r['snippet']}\nURL: {r['url']}")
+        meta = f"({r.get('author', 'Anonim')}, {r.get('year', 'n.d.')}"
+        if r.get("citation_count") is not None:
+            meta += f" | {r.get('citation_count', 0)} sitasi"
+        if r.get("venue"):
+            meta += f" | {r.get('venue')}"
+        meta += ")"
+        lines.append(f"[{r['id']}] {r['title']} {meta}\n{r['snippet']}\nURL: {r['url']}")
     return "\n\n".join(lines)
 
 

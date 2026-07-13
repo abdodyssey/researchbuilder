@@ -3,37 +3,49 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { FlaskConical, Mail, Lock, User, Sparkles } from "lucide-react";
-import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
+import { FlaskConical, Mail, Lock, User, Loader2, Eye, EyeOff } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
-  const { login, register, token, loading } = useAuth();
+  const { login, register, resendVerification, token, loading, user } = useAuth();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
+  const [resendMsg, setResendMsg] = useState("");
+  const [resending, setResending] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    if (token && !loading) {
-      router.push("/dashboard");
-    }
-  }, [token, loading]);
+    if (user && !loading) router.push("/research");
+  }, [user, loading]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg("");
-    setSubmitting(true);
 
+    if (activeTab === "register" && password !== confirmPassword) {
+      setErrorMsg("Kata sandi tidak cocok.");
+      return;
+    }
+
+    setSubmitting(true);
     try {
       if (activeTab === "login") {
         await login(email, password);
       } else {
-        await register(email, password, fullName);
+        const res = await register(email, password, fullName);
+        // Tidak auto-login — tampilkan layar "cek email Anda".
+        setRegisteredEmail(res.email);
       }
     } catch (err: any) {
       setErrorMsg(err.message || "Terjadi kesalahan sistem. Silakan coba kembali.");
@@ -42,119 +54,216 @@ export default function LoginPage() {
     }
   }
 
+  async function handleResend() {
+    if (!registeredEmail) return;
+    setResendMsg("");
+    setErrorMsg("");
+    setResending(true);
+    try {
+      const msg = await resendVerification(registeredEmail);
+      setResendMsg(msg);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Gagal mengirim ulang.");
+    } finally {
+      setResending(false);
+    }
+  }
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-bg-main" aria-live="polite">
-        <span className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></span>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="animate-spin w-8 h-8" />
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-bg-main p-4">
+    <div className="flex items-center justify-center min-h-screen bg-background p-4">
       <div className="w-full max-w-md">
-        {/* Brand Identity */}
-        <div className="flex items-center justify-center gap-3 mb-6">
-          <div className="w-9 h-9 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-center text-primary shrink-0">
+        {/* Brand */}
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <div className="w-9 h-9 rounded-lg border flex items-center justify-center">
             <FlaskConical className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-outfit font-extrabold text-xl text-text-primary tracking-tight">
-              ResearchBuilder
-            </h1>
-            <p className="text-[10px] text-text-secondary uppercase tracking-widest leading-none mt-0.5">Platform Penulisan Akademik</p>
+            <h1 className="font-semibold text-xl tracking-tight">ResearchBuilder</h1>
+            <p className="text-xs text-muted-foreground">Platform Penulisan Akademik</p>
           </div>
         </div>
 
-        <Card className="border border-border-color bg-bg-card p-8">
-          {/* Tab Switcher */}
-          <div className="flex border-b border-border-color mb-6" role="tablist">
-            <button
-              onClick={() => {
-                setActiveTab("login");
-                setErrorMsg("");
-              }}
-              role="tab"
-              aria-selected={activeTab === "login"}
-              className={`flex-1 pb-3 text-sm font-semibold transition-colors border-b-2 cursor-pointer ${
-                activeTab === "login"
-                  ? "border-primary text-text-primary"
-                  : "border-transparent text-text-secondary hover:text-text-primary"
-              }`}
-            >
-              Masuk
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("register");
-                setErrorMsg("");
-              }}
-              role="tab"
-              aria-selected={activeTab === "register"}
-              className={`flex-1 pb-3 text-sm font-semibold transition-colors border-b-2 cursor-pointer ${
-                activeTab === "register"
-                  ? "border-primary text-text-primary"
-                  : "border-transparent text-text-secondary hover:text-text-primary"
-              }`}
-            >
-              Daftar Akun
-            </button>
-          </div>
+        <Card>
+          <CardContent className="pt-6">
+            {registeredEmail ? (
+              /* ── Layar "Cek Email Anda" setelah registrasi ── */
+              <div className="text-center py-4">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                  <Mail className="w-6 h-6 text-primary" />
+                </div>
+                <h2 className="font-semibold text-lg mb-2">Cek email Anda</h2>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Kami mengirim tautan verifikasi ke
+                </p>
+                <p className="text-sm font-medium mb-4">{registeredEmail}</p>
+                <p className="text-xs text-muted-foreground mb-6">
+                  Klik tautan di email untuk mengaktifkan akun. Jangan lupa cek folder spam.
+                </p>
 
-          {/* Feedback Messages */}
-          {errorMsg && (
-            <div className="mb-6 p-3 bg-status-error/10 border border-status-error/20 rounded-md text-status-error text-xs flex items-center gap-2" role="alert">
-              <span className="w-1.5 h-1.5 bg-red-500 rounded-full shrink-0"></span>
-              <span>{errorMsg}</span>
+                {resendMsg && (
+                  <div className="mb-4 p-3 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs">
+                    {resendMsg}
+                  </div>
+                )}
+                {errorMsg && (
+                  <div className="mb-4 p-3 rounded-lg border border-destructive/30 bg-destructive/5 text-destructive text-xs">
+                    {errorMsg}
+                  </div>
+                )}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full mb-2"
+                  onClick={handleResend}
+                  disabled={resending}
+                >
+                  {resending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Kirim ulang tautan"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegisteredEmail(null);
+                    setActiveTab("login");
+                    setResendMsg("");
+                    setErrorMsg("");
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  Kembali ke halaman masuk
+                </button>
+              </div>
+            ) : (
+            <>
+            {/* Tabs */}
+            <div className="flex border-b mb-6" role="tablist">
+              {(["login", "register"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => { setActiveTab(tab); setErrorMsg(""); }}
+                  role="tab"
+                  aria-selected={activeTab === tab}
+                  className={cn(
+                    "flex-1 pb-3 text-sm font-medium transition-colors border-b-2 cursor-pointer",
+                    activeTab === tab
+                      ? "border-foreground text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {tab === "login" ? "Masuk" : "Daftar Akun"}
+                </button>
+              ))}
             </div>
-          )}
 
-          {/* Submission Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {activeTab === "register" && (
-              <Input
-                label="Nama Lengkap"
-                type="text"
-                required
-                placeholder="Budi Santoso"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                icon={<User className="h-4 w-4" />}
-                autoComplete="name"
-              />
+            {/* Error */}
+            {errorMsg && (
+              <div className="mb-4 p-3 rounded-lg border border-destructive/30 bg-destructive/5 text-destructive text-xs" role="alert">
+                {errorMsg}
+              </div>
             )}
 
-            <Input
-              label="Alamat Email"
-              type="email"
-              required
-              placeholder="nama@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              icon={<Mail className="h-4 w-4" />}
-              autoComplete="email"
-            />
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {activeTab === "register" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Nama Lengkap</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      required
+                      placeholder="Budi Santoso"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      autoComplete="name"
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+              )}
 
-            <Input
-              label="Kata Sandi"
-              type="password"
-              required
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              icon={<Lock className="h-4 w-4" />}
-              autoComplete={activeTab === "login" ? "current-password" : "new-password"}
-            />
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Alamat Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type="email"
+                    required
+                    placeholder="nama@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    className="pl-9"
+                  />
+                </div>
+              </div>
 
-            <Button
-              type="submit"
-              loading={submitting}
-              className="w-full py-2.5 mt-6"
-              icon={<Sparkles className="w-4 h-4" />}
-            >
-              {activeTab === "login" ? "Masuk ke Dashboard" : "Selesaikan Pendaftaran"}
-            </Button>
-          </form>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Kata Sandi</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete={activeTab === "login" ? "current-password" : "new-password"}
+                    className="pl-9 pr-9"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {activeTab === "register" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Konfirmasi Kata Sandi</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      type={showConfirm ? "text" : "password"}
+                      required
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      autoComplete="new-password"
+                      className="pl-9 pr-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirm(!showConfirm)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <Button type="submit" disabled={submitting} className="w-full mt-2">
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {activeTab === "login" ? "Masuk ke Dashboard" : "Selesaikan Pendaftaran"}
+              </Button>
+            </form>
+            </>
+            )}
+          </CardContent>
         </Card>
       </div>
     </div>

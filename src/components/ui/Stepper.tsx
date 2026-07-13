@@ -20,16 +20,16 @@ export function Stepper({ steps, currentStep }: StepperProps) {
               <div
                 className={`
                   w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all
-                  ${isDone ? "bg-status-success text-white" : ""}
-                  ${isActive ? "bg-primary text-white ring-4 ring-primary/20" : ""}
-                  ${!isDone && !isActive ? "bg-bg-main border border-border-color text-text-muted" : ""}
+                  ${isDone ? "bg-green-600 text-white" : ""}
+                  ${isActive ? "bg-primary text-primary-foreground ring-4 ring-primary/20" : ""}
+                  ${!isDone && !isActive ? "bg-background border border-border text-muted-foreground" : ""}
                 `}
               >
                 {isDone ? <CheckCircle2 className="w-4 h-4" /> : stepNum}
               </div>
               <span
                 className={`text-[10px] font-medium text-center leading-tight hidden sm:block ${
-                  isActive ? "text-primary font-bold" : isDone ? "text-status-success" : "text-text-muted"
+                  isActive ? "text-primary font-bold" : isDone ? "text-green-600" : "text-muted-foreground"
                 }`}
               >
                 {label}
@@ -38,7 +38,7 @@ export function Stepper({ steps, currentStep }: StepperProps) {
             {i < steps.length - 1 && (
               <div
                 className={`flex-1 h-0.5 mx-1.5 rounded-full transition-colors ${
-                  stepNum < currentStep ? "bg-status-success" : "bg-border-color"
+                  stepNum < currentStep ? "bg-green-600" : "bg-border"
                 }`}
               />
             )}

@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 import {
   PenLine,
   Search,
@@ -20,19 +21,15 @@ import {
   Trash2,
   Plus,
 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Stepper } from "@/components/ui/Stepper";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const STEPS = ["Topik", "Pilih Judul", "Outline", "Penulisan", "Hasil"];
 
-const STRUCTURE_OPTIONS = [
-  { value: "imrad", label: "IMRAD", desc: "Introduction, Methods, Results, Discussion" },
-  { value: "skripsi", label: "Skripsi", desc: "Pendahuluan, Tinjauan Pustaka, Metodologi, Hasil, Kesimpulan" },
-  { value: "custom", label: "Otomatis", desc: "AI menyesuaikan struktur berdasarkan topik" },
-];
+
 
 interface TitleOption {
   title: string;
@@ -54,6 +51,7 @@ interface OutlineSection {
 
 export default function ResearchPage() {
   const { user, authFetch } = useAuth();
+  const router = useRouter();
 
   // Wizard state
   const [step, setStep] = useState(1);
@@ -86,6 +84,12 @@ export default function ResearchPage() {
 
   // General
   const [error, setError] = useState<string | null>(null);
+  const [insufficient, setInsufficient] = useState<{
+    message: string;
+    balance: number;
+    required: number;
+    shortfall: number;
+  } | null>(null);
   const [polling, setPolling] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
@@ -94,6 +98,10 @@ export default function ResearchPage() {
   const abortedRef = useRef(false);
 
   useEffect(() => {
+    // Reset saat mount — penting untuk React Strict Mode (dev) yang
+    // menjalankan mount→unmount→mount. Tanpa reset ini, abortedRef tetap
+    // true dari unmount pertama → semua polling langsung berhenti (loading selamanya).
+    abortedRef.current = false;
     return () => {
       abortedRef.current = true;
       if (pollRef.current) clearTimeout(pollRef.current);
@@ -108,11 +116,38 @@ export default function ResearchPage() {
       reader.onerror = reject;
     });
 
+  /**
+   * Tangani response gagal dari API research.
+   * 402 = saldo token tidak cukup → tampilkan panel beli token (detail terstruktur).
+   * Lainnya → lempar Error dengan pesan yang bisa dibaca.
+   */
+  const handleApiError = async (res: Response, fallback: string) => {
+    let detail: any = null;
+    try {
+      const body = await res.json();
+      detail = body.detail;
+    } catch {
+      /* body bukan JSON */
+    }
+    if (res.status === 402 && detail && typeof detail === "object") {
+      setInsufficient({
+        message: detail.message || "Saldo token tidak cukup.",
+        balance: detail.balance ?? 0,
+        required: detail.required ?? 0,
+        shortfall: detail.shortfall ?? 0,
+      });
+      throw new Error("__insufficient__"); // ditangani khusus, tidak ditampilkan sebagai error biasa
+    }
+    const msg = typeof detail === "string" ? detail : fallback;
+    throw new Error(msg);
+  };
+
   // Step 1: Submit topic → generate titles
   const handleSubmitTopic = async () => {
     if (!tema.trim()) return;
     setGeneratingTitles(true);
     setError(null);
+    setInsufficient(null);
 
     try {
       const body: any = {
@@ -133,15 +168,14 @@ export default function ResearchPage() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Gagal memulai riset");
+        await handleApiError(res, "Gagal memulai riset");
       }
 
       const data = await res.json();
       setResearchId(data.research_id);
       pollForTitles(data.research_id);
     } catch (e: any) {
-      setError(e.message);
+      if (e.message !== "__insufficient__") setError(e.message);
       setGeneratingTitles(false);
     }
   };
@@ -182,6 +216,7 @@ export default function ResearchPage() {
     if (!researchId) return;
     setSelectingTitle(index);
     setError(null);
+    setInsufficient(null);
 
     try {
       const res = await authFetch(`/api/research/${researchId}/select-title`, {
@@ -191,8 +226,7 @@ export default function ResearchPage() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Gagal memilih judul");
+        await handleApiError(res, "Gagal memilih judul");
       }
 
       const data = await res.json();
@@ -201,7 +235,7 @@ export default function ResearchPage() {
       setPolling(true);
       pollForOutline(researchId);
     } catch (e: any) {
-      setError(e.message);
+      if (e.message !== "__insufficient__") setError(e.message);
     } finally {
       setSelectingTitle(null);
     }
@@ -242,6 +276,7 @@ export default function ResearchPage() {
     if (!researchId) return;
     setConfirmingOutline(true);
     setError(null);
+    setInsufficient(null);
 
     try {
       const res = await authFetch(`/api/research/${researchId}/confirm-outline`, {
@@ -251,15 +286,14 @@ export default function ResearchPage() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Gagal mengkonfirmasi outline");
+        await handleApiError(res, "Gagal mengkonfirmasi outline");
       }
 
       setStep(4);
       setPolling(true);
       pollForWriting(researchId);
     } catch (e: any) {
-      setError(e.message);
+      if (e.message !== "__insufficient__") setError(e.message);
     } finally {
       setConfirmingOutline(false);
     }
@@ -390,11 +424,12 @@ export default function ResearchPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-extrabold font-outfit text-text-primary tracking-tight">Buat Artikel Riset</h2>
-          <p className="text-xs text-text-secondary mt-1">Wizard interaktif untuk menghasilkan artikel ilmiah dari topik hingga ekspor.</p>
+          <h2 className="text-xl font-extrabold  text-foreground tracking-tight">Buat Artikel Riset</h2>
+          <p className="text-xs text-muted-foreground mt-1">Wizard interaktif untuk menghasilkan artikel ilmiah dari topik hingga ekspor.</p>
         </div>
         {step > 1 && (
-          <Button variant="ghost" size="sm" onClick={handleReset} icon={<RotateCcw className="w-3.5 h-3.5" />}>
+          <Button variant="ghost" size="sm" onClick={handleReset}>
+            <RotateCcw className="w-3.5 h-3.5" />
             Mulai Ulang
           </Button>
         )}
@@ -405,11 +440,34 @@ export default function ResearchPage() {
 
       {/* Error Banner */}
       {error && (
-        <div className="p-4 rounded-lg bg-status-error/10 border border-status-error/20 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-status-error shrink-0 mt-0.5" />
+        <div className="p-4 rounded-lg bg-destructive/10 border border-status-error/20 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-bold text-status-error">Terjadi Kesalahan</p>
-            <p className="text-xs text-status-error/80 mt-1">{error}</p>
+            <p className="text-sm font-bold text-destructive">Terjadi Kesalahan</p>
+            <p className="text-xs text-destructive/80 mt-1">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Insufficient Tokens Banner — arahkan user beli token */}
+      {insufficient && (
+        <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-bold text-amber-700 dark:text-amber-500">Saldo Token Tidak Cukup</p>
+            <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mt-1">{insufficient.message}</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-amber-700/70 dark:text-amber-500/70">
+              <span>Saldo Anda: <strong>{insufficient.balance.toLocaleString("id-ID")}</strong></span>
+              <span>Dibutuhkan: <strong>{insufficient.required.toLocaleString("id-ID")}</strong></span>
+              <span>Kurang: <strong>{insufficient.shortfall.toLocaleString("id-ID")}</strong></span>
+            </div>
+            <Button
+              size="sm"
+              className="mt-3 bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={() => router.push("/billing")}
+            >
+              Beli Token
+            </Button>
           </div>
         </div>
       )}
@@ -419,107 +477,31 @@ export default function ResearchPage() {
         <div className="space-y-6 animate-in fade-in duration-300">
           <Card className="p-6 md:p-8">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold font-outfit">1</div>
+              <div className="w-8 h-8 rounded-lg bg-primary/10 border border-border flex items-center justify-center text-primary font-bold ">1</div>
               <div>
-                <h3 className="text-base font-extrabold font-outfit text-text-primary tracking-tight">Masukkan Topik Penelitian</h3>
-                <p className="text-xs text-text-secondary mt-0.5">Deskripsikan tema penelitian yang ingin Anda tulis.</p>
+                <h3 className="text-base font-extrabold  text-foreground tracking-tight">Masukkan Topik Penelitian</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Deskripsikan tema penelitian yang ingin Anda tulis.</p>
               </div>
             </div>
 
             <textarea
-              className="w-full h-32 bg-bg-main border border-border-color rounded-lg p-4 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 resize-none transition-colors"
+              className="w-full h-32 bg-background border border-border rounded-lg p-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-border focus:ring-1 focus:ring-primary/50 resize-none transition-colors"
               placeholder="Contoh: Pengaruh kecerdasan buatan terhadap efisiensi pelayanan kesehatan di Indonesia..."
               value={tema}
               onChange={(e) => setTema(e.target.value)}
             />
-            <div className="mt-2 text-right text-xs text-text-muted">{tema.length} karakter</div>
+            <div className="mt-2 text-right text-xs text-muted-foreground">{tema.length} karakter</div>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Bahasa */}
-            <Card className="p-5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-3">Bahasa Output</label>
-              <div className="flex gap-2">
-                {[
-                  { value: "id", label: "Indonesia" },
-                  { value: "en", label: "English" },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setBahasa(opt.value)}
-                    className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-semibold transition-all border ${
-                      bahasa === opt.value
-                        ? "bg-primary/10 border-primary/30 text-primary"
-                        : "bg-bg-main border-border-color text-text-secondary hover:border-border-hover"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </Card>
-
-            {/* Structure */}
-            <Card className="p-5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-3">Struktur Artikel</label>
-              <div className="space-y-1.5">
-                {STRUCTURE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setStructurePreset(opt.value)}
-                    className={`w-full text-left py-2 px-3 rounded-lg text-xs transition-all border ${
-                      structurePreset === opt.value
-                        ? "bg-primary/10 border-primary/30 text-primary"
-                        : "bg-bg-main border-border-color text-text-secondary hover:border-border-hover"
-                    }`}
-                  >
-                    <span className="font-bold">{opt.label}</span>
-                    <span className="text-text-muted ml-1.5">— {opt.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </Card>
-          </div>
-
-          {/* Upload Doc */}
-          <Card className="p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Dokumen Referensi</label>
-              <Badge variant="trial">Opsional</Badge>
-            </div>
-            <div
-              className="border-2 border-dashed border-border-color hover:border-primary/40 rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all bg-bg-main hover:bg-primary/5 group"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <input
-                type="file"
-                accept=".pdf,.docx,.txt"
-                className="hidden"
-                ref={fileInputRef}
-                onChange={(e) => e.target.files?.[0] && setUploadedFile(e.target.files[0])}
-              />
-              {uploadedFile ? (
-                <>
-                  <FileText className="w-6 h-6 text-primary mb-2" />
-                  <p className="text-xs font-bold text-text-primary">{uploadedFile.name}</p>
-                  <p className="text-[10px] text-text-muted mt-1">Klik untuk mengganti</p>
-                </>
-              ) : (
-                <>
-                  <Upload className="w-5 h-5 text-text-muted group-hover:text-primary mb-2 transition-colors" />
-                  <p className="text-xs text-text-secondary">Upload PDF, DOCX, atau TXT sebagai konteks referensi</p>
-                </>
-              )}
-            </div>
-          </Card>
+          {/* Submitting button container */}
 
           <div className="flex justify-end pt-2">
             <Button
+              size="lg"
               onClick={handleSubmitTopic}
               disabled={!tema.trim()}
-              className="py-2.5 px-8 text-sm"
-              icon={<Search className="w-4 h-4" />}
             >
+              <Search className="w-4 h-4" />
               Cari Judul
             </Button>
           </div>
@@ -529,11 +511,11 @@ export default function ResearchPage() {
       {/* Loading: generating titles */}
       {step === 1 && generatingTitles && (
         <Card className="p-12 flex flex-col items-center justify-center text-center min-h-[300px] animate-in fade-in duration-300">
-          <div className="w-16 h-16 bg-bg-main border border-border-color rounded-xl flex items-center justify-center mb-6">
+          <div className="w-16 h-16 bg-background border border-border rounded-xl flex items-center justify-center mb-6">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
-          <h3 className="text-lg font-extrabold font-outfit text-text-primary tracking-tight mb-2">Menganalisis Topik</h3>
-          <p className="text-xs text-text-secondary max-w-sm">AI sedang merumuskan 3 opsi judul penelitian berdasarkan topik Anda...</p>
+          <h3 className="text-lg font-extrabold  text-foreground tracking-tight mb-2">Menganalisis Topik</h3>
+          <p className="text-xs text-muted-foreground max-w-sm">Mencari literatur di Semantic Scholar & merumuskan 3 judul berbasis research gap...</p>
         </Card>
       )}
 
@@ -541,33 +523,33 @@ export default function ResearchPage() {
       {step === 2 && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="text-center mb-6">
-            <h3 className="text-lg font-extrabold font-outfit text-text-primary tracking-tight">Pilih Judul Penelitian</h3>
-            <p className="text-xs text-text-secondary mt-1">AI menemukan 3 sudut pandang berbeda. Pilih yang paling sesuai.</p>
+            <h3 className="text-lg font-extrabold  text-foreground tracking-tight">Pilih Judul Penelitian</h3>
+            <p className="text-xs text-muted-foreground mt-1">AI menemukan 3 sudut pandang berbeda. Pilih yang paling sesuai.</p>
           </div>
 
           {titleOptions.map((opt, idx) => (
             <Card
               key={idx}
-              className={`p-5 cursor-pointer transition-all hover:border-primary/40 ${
-                selectingTitle === idx ? "border-primary/60 ring-2 ring-primary/20" : ""
+              className={`p-5 cursor-pointer transition-all hover:border-border ${
+                selectingTitle === idx ? "border-border ring-2 ring-primary/20" : ""
               }`}
               onClick={() => !selectingTitle && handleSelectTitle(idx)}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="info">{opt.article_type}</Badge>
+                    <Badge variant="secondary">{opt.article_type}</Badge>
                   </div>
-                  <h4 className="text-sm font-bold text-text-primary leading-snug mb-2">{opt.title}</h4>
-                  <p className="text-xs text-text-secondary leading-relaxed mb-3">{opt.description}</p>
+                  <h4 className="text-sm font-bold text-foreground leading-snug mb-2">{opt.title}</h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed mb-3">{opt.description}</p>
 
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {opt.keywords.map((kw, ki) => (
-                      <span key={ki} className="text-[10px] px-2 py-0.5 bg-bg-main border border-border-color rounded-md text-text-muted">{kw}</span>
+                      <span key={ki} className="text-[10px] px-2 py-0.5 bg-background border border-border rounded-md text-muted-foreground">{kw}</span>
                     ))}
                   </div>
 
-                  <div className="text-[10px] text-text-muted">
+                  <div className="text-[10px] text-muted-foreground">
                     <span className="font-bold">Pertanyaan riset:</span>{" "}
                     {opt.research_questions.slice(0, 2).join(" • ")}
                   </div>
@@ -577,7 +559,7 @@ export default function ResearchPage() {
                   {selectingTitle === idx ? (
                     <Loader2 className="w-5 h-5 text-primary animate-spin" />
                   ) : (
-                    <ChevronRight className="w-5 h-5 text-text-muted" />
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
                   )}
                 </div>
               </div>
@@ -591,59 +573,59 @@ export default function ResearchPage() {
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {polling && !outline ? (
             <Card className="p-12 flex flex-col items-center justify-center text-center min-h-[300px]">
-              <div className="w-16 h-16 bg-bg-main border border-border-color rounded-xl flex items-center justify-center mb-6">
+              <div className="w-16 h-16 bg-background border border-border rounded-xl flex items-center justify-center mb-6">
                 <Loader2 className="w-8 h-8 text-primary animate-spin" />
               </div>
-              <h3 className="text-lg font-extrabold font-outfit text-text-primary tracking-tight mb-2">Menyiapkan Outline</h3>
-              <p className="text-xs text-text-secondary max-w-sm">
+              <h3 className="text-lg font-extrabold  text-foreground tracking-tight mb-2">Menyiapkan Outline</h3>
+              <p className="text-xs text-muted-foreground max-w-sm">
                 Mencari literatur, menyintesis temuan, dan menyusun kerangka artikel...
               </p>
-              <p className="text-[10px] text-text-muted mt-4">Proses ini membutuhkan 30–90 detik.</p>
+              <p className="text-[10px] text-muted-foreground mt-4">Proses ini membutuhkan 30–90 detik.</p>
             </Card>
           ) : outline ? (
             <>
               <div className="text-center mb-2">
-                <h3 className="text-lg font-extrabold font-outfit text-text-primary tracking-tight">Review Kerangka Artikel</h3>
-                <p className="text-xs text-text-secondary mt-1">Anda dapat mengedit judul bab dan poin-poin sebelum memulai penulisan.</p>
+                <h3 className="text-lg font-extrabold  text-foreground tracking-tight">Review Kerangka Artikel</h3>
+                <p className="text-xs text-muted-foreground mt-1">Anda dapat mengedit judul bab dan poin-poin sebelum memulai penulisan.</p>
               </div>
 
-              <Card className="p-5 border-primary/20">
+              <Card className="p-5 border-border">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Judul Artikel</span>
-                  <Badge variant="neutral">~{outline.estimated_total_words} kata</Badge>
+                  <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Judul Artikel</span>
+                  <Badge variant="outline">~{outline.estimated_total_words} kata</Badge>
                 </div>
-                <p className="text-sm font-bold text-text-primary">{outline.title}</p>
+                <p className="text-sm font-bold text-foreground">{outline.title}</p>
               </Card>
 
               <div className="space-y-3">
                 {outline.sections.map((sec, sIdx) => (
                   <Card key={sec.id} className="p-4">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-6 h-6 rounded bg-bg-main border border-border-color flex items-center justify-center text-[10px] font-bold text-text-muted shrink-0">
+                      <div className="w-6 h-6 rounded bg-background border border-border flex items-center justify-center text-[10px] font-bold text-muted-foreground shrink-0">
                         {sIdx + 1}
                       </div>
                       <input
                         type="text"
                         value={sec.title}
                         onChange={(e) => updateSectionTitle(sIdx, e.target.value)}
-                        className="flex-1 text-sm font-bold text-text-primary bg-transparent border-b border-transparent hover:border-border-color focus:border-primary focus:outline-none py-0.5 transition-colors"
+                        className="flex-1 text-sm font-bold text-foreground bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none py-0.5 transition-colors"
                       />
-                      <span className="text-[10px] text-text-muted shrink-0">~{sec.word_target} kata</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">~{sec.word_target} kata</span>
                     </div>
-                    <p className="text-[10px] text-text-muted mb-2 ml-9">{sec.purpose}</p>
+                    <p className="text-[10px] text-muted-foreground mb-2 ml-9">{sec.purpose}</p>
                     <div className="ml-9 space-y-1.5">
                       {sec.key_points.map((kp, kIdx) => (
                         <div key={kIdx} className="flex items-center gap-2">
-                          <span className="text-text-muted text-[10px]">•</span>
+                          <span className="text-muted-foreground text-[10px]">•</span>
                           <input
                             type="text"
                             value={kp}
                             onChange={(e) => updateKeyPoint(sIdx, kIdx, e.target.value)}
-                            className="flex-1 text-xs text-text-secondary bg-transparent border-b border-transparent hover:border-border-color focus:border-primary focus:outline-none py-0.5 transition-colors"
+                            className="flex-1 text-xs text-muted-foreground bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none py-0.5 transition-colors"
                           />
                           <button
                             onClick={() => removeKeyPoint(sIdx, kIdx)}
-                            className="p-0.5 text-text-muted hover:text-status-error transition-colors"
+                            className="p-0.5 text-muted-foreground hover:text-destructive transition-colors"
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>
@@ -662,11 +644,12 @@ export default function ResearchPage() {
 
               <div className="flex justify-end pt-2">
                 <Button
+                  size="lg"
                   onClick={handleConfirmOutline}
-                  loading={confirmingOutline}
-                  className="py-2.5 px-8 text-sm"
-                  icon={<ArrowRight className="w-4 h-4" />}
+                  disabled={confirmingOutline}
                 >
+                  {confirmingOutline && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <ArrowRight className="w-4 h-4" />
                   Mulai Menulis
                 </Button>
               </div>
@@ -679,23 +662,23 @@ export default function ResearchPage() {
       {step === 4 && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <Card className="p-8 text-center">
-            <div className="w-16 h-16 bg-bg-main border border-border-color rounded-xl flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 bg-background border border-border rounded-xl flex items-center justify-center mx-auto mb-6">
               <PenLine className="w-8 h-8 text-primary animate-pulse" />
             </div>
-            <h3 className="text-lg font-extrabold font-outfit text-text-primary tracking-tight mb-2">Menulis Artikel</h3>
-            <p className="text-xs text-text-secondary mb-6">
+            <h3 className="text-lg font-extrabold  text-foreground tracking-tight mb-2">Menulis Artikel</h3>
+            <p className="text-xs text-muted-foreground mb-6">
               {writingProgress.current_section || "Memulai proses penulisan..."}
             </p>
 
             {writingProgress.total > 0 && (
               <>
-                <div className="w-full max-w-md mx-auto h-2 bg-bg-main rounded-full border border-border-color overflow-hidden mb-3">
+                <div className="w-full max-w-md mx-auto h-2 bg-background rounded-full border border-border overflow-hidden mb-3">
                   <div
                     className="h-full rounded-full bg-primary transition-all duration-700"
                     style={{ width: `${Math.round((writingProgress.completed / writingProgress.total) * 100)}%` }}
                   />
                 </div>
-                <p className="text-xs text-text-muted">
+                <p className="text-xs text-muted-foreground">
                   {writingProgress.completed} / {writingProgress.total} bab selesai
                 </p>
               </>
@@ -721,30 +704,32 @@ export default function ResearchPage() {
                 }}
               >
                 <span
-                  className={`text-3xl font-extrabold font-outfit ${
+                  className={`text-3xl font-extrabold  ${
                     review.overall_score >= 80
-                      ? "text-status-success"
+                      ? "text-green-600"
                       : review.overall_score >= 60
-                        ? "text-status-warning"
-                        : "text-status-error"
+                        ? "text-yellow-600"
+                        : "text-destructive"
                   }`}
                 >
                   {review.overall_score}
                 </span>
               </div>
-              <h2 className="text-2xl font-extrabold font-outfit text-text-primary tracking-tight mb-2">Artikel Selesai!</h2>
-              <p className="text-xs text-text-secondary max-w-md mx-auto mb-6">{review.review_summary}</p>
+              <h2 className="text-2xl font-extrabold  text-foreground tracking-tight mb-2">Artikel Selesai!</h2>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto mb-6">{review.review_summary}</p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Button
+                  size="lg"
                   onClick={handleDownload}
-                  loading={downloading}
-                  className="py-3 px-8 text-sm"
-                  icon={<Download className="w-4 h-4" />}
+                  disabled={downloading}
                 >
+                  {downloading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <Download className="w-4 h-4" />
                   Unduh DOCX
                 </Button>
-                <Button variant="secondary" onClick={handleReset} className="py-3 px-8 text-sm" icon={<RotateCcw className="w-4 h-4" />}>
+                <Button variant="outline" size="lg" onClick={handleReset}>
+                  <RotateCcw className="w-4 h-4" />
                   Buat Artikel Baru
                 </Button>
               </div>
@@ -753,13 +738,13 @@ export default function ResearchPage() {
 
           {/* Abstract + Keywords */}
           <Card className="p-5">
-            <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-3">Abstrak</h4>
-            <p className="text-xs text-text-secondary leading-relaxed">{review.abstract}</p>
-            <div className="mt-4 pt-3 border-t border-border-color">
-              <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Kata Kunci</h4>
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Abstrak</h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">{review.abstract}</p>
+            <div className="mt-4 pt-3 border-t border-border">
+              <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Kata Kunci</h4>
               <div className="flex flex-wrap gap-1.5">
                 {review.keywords_final.map((kw, i) => (
-                  <span key={i} className="text-[10px] px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-md text-primary font-medium">{kw}</span>
+                  <span key={i} className="text-[10px] px-2 py-0.5 bg-primary/10 border border-border rounded-md text-primary font-medium">{kw}</span>
                 ))}
               </div>
             </div>
@@ -768,20 +753,20 @@ export default function ResearchPage() {
           {/* Issues */}
           {review.issues && review.issues.length > 0 && (
             <Card className="p-5">
-              <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-3">Catatan Reviewer ({review.issues.length})</h4>
+              <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Catatan Reviewer ({review.issues.length})</h4>
               <div className="space-y-2">
                 {review.issues.map((issue: any, i: number) => (
-                  <div key={i} className="flex items-start gap-2 text-xs p-2.5 bg-bg-main rounded-lg border border-border-color">
+                  <div key={i} className="flex items-start gap-2 text-xs p-2.5 bg-background rounded-lg border border-border">
                     <Badge
-                      variant={issue.severity === "critical" ? "error" : issue.severity === "major" ? "warning" : "neutral"}
+                      variant={issue.severity === "critical" ? "destructive" : issue.severity === "major" ? "secondary" : "outline"}
                       className="shrink-0 mt-0.5"
                     >
                       {issue.severity}
                     </Badge>
                     <div>
-                      <span className="text-text-primary font-medium">{issue.description}</span>
+                      <span className="text-foreground font-medium">{issue.description}</span>
                       {issue.suggestion && (
-                        <p className="text-text-muted mt-0.5">{issue.suggestion}</p>
+                        <p className="text-muted-foreground mt-0.5">{issue.suggestion}</p>
                       )}
                     </div>
                   </div>

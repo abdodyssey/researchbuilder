@@ -13,7 +13,7 @@ Balance = tokens_purchased - tokens_used.
 
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, UniqueConstraint, JSON, Index
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -29,17 +29,21 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
     full_name = Column(String, nullable=True)
+    role = Column(String, default="user")  # "user" | "admin"
 
     tokens_purchased = Column(Integer, default=0)
     tokens_used = Column(Integer, default=0)
 
-    # Kolom-kolom berikut tidak lagi digunakan oleh logika bisnis (PAYG token-based).
-    # Tetap ada karena SQLite < 3.35 tidak mendukung DROP COLUMN.
-    # Jika migrasi ke PostgreSQL: hapus kolom ini via Alembic migration.
-    plan             = Column(String,   default="active")  # ex-subscription plan
-    tokens_reset_at  = Column(DateTime, nullable=True)     # ex-monthly reset
-    trial_started_at = Column(DateTime, nullable=True)     # ex-trial feature
-    trial_ends_at    = Column(DateTime, nullable=True)     # ex-trial feature
+    # Verifikasi email (magic link). User baru wajib verifikasi sebelum bisa login.
+    email_verified = Column(Boolean, default=False)
+    verification_token = Column(String, nullable=True, index=True)
+    verification_sent_at = Column(DateTime, nullable=True)
+
+    # Kolom legacy — tetap ada untuk compat. Hapus via Alembic migration nanti.
+    plan             = Column(String,   default="active")
+    tokens_reset_at  = Column(DateTime, nullable=True)
+    trial_started_at = Column(DateTime, nullable=True)
+    trial_ends_at    = Column(DateTime, nullable=True)
 
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utcnow)
@@ -47,7 +51,13 @@ class User(Base):
     payments = relationship("Payment", back_populates="user")
 
     @property
+    def is_admin(self) -> bool:
+        return self.role == "admin"
+
+    @property
     def tokens_balance(self) -> int:
+        if self.is_admin:
+            return 999_999_999
         return max(0, self.tokens_purchased - self.tokens_used)
 
 
@@ -68,3 +78,42 @@ class Payment(Base):
     plan = Column(String, nullable=True)  # ex-subscription plan
 
     user = relationship("User", back_populates="payments")
+
+
+class ResearchJob(Base):
+    """
+    State satu sesi riset interaktif (Topik → Judul → Outline → Penulisan → Hasil).
+
+    Menggantikan penyimpanan berbasis file JSON (research_*.json + pipeline_state_*.json)
+    agar state hidup di database — konsisten, bisa di-query per user, dan siap untuk
+    horizontal scale saat pindah ke Neon Postgres.
+
+    Desain: kolom yang sering di-query (user_id, status, step, created_at) dipromosikan
+    jadi kolom asli untuk index; sisa state kompleks (title_options, pipeline stages, dst)
+    disimpan sebagai JSON di kolom `data`. JSON = native di Postgres, TEXT di SQLite.
+    """
+    __tablename__ = "research_jobs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+
+    status = Column(String, default="generating_titles", index=True)
+    step = Column(Integer, default=1)
+
+    # Referensi ke pipeline penulisan (dulu pipeline_state_{id}.json).
+    pipeline_id = Column(String, nullable=True, index=True)
+
+    # Snapshot lengkap ResearchSession (Pydantic) sebagai JSON.
+    session_data = Column(JSON, nullable=True)
+    # Snapshot lengkap PipelineState (Pydantic) sebagai JSON.
+    pipeline_data = Column(JSON, nullable=True)
+
+    error = Column(String, nullable=True)
+    created_at = Column(DateTime, default=utcnow, index=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    user = relationship("User")
+
+
+# Index gabungan untuk query "daftar riset milik user, terbaru dulu".
+Index("ix_research_jobs_user_created", ResearchJob.user_id, ResearchJob.created_at)

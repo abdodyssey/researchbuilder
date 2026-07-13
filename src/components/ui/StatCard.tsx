@@ -1,5 +1,11 @@
 import React from "react";
-import { Card } from "./Card";
+import {
+  Card,
+  CardAction,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 interface StatCardProps {
   title: string;
@@ -11,22 +17,18 @@ interface StatCardProps {
 export function StatCard({ title, value, icon, description }: StatCardProps) {
   return (
     <Card>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1">
-            {title}
-          </p>
-          <p className="text-2xl font-extrabold font-outfit text-text-primary tracking-tight">
-            {value}
-          </p>
-          {description && (
-            <p className="text-xs text-text-secondary mt-1">{description}</p>
-          )}
-        </div>
-        <div className="w-10 h-10 rounded-lg bg-bg-main border border-border-color flex items-center justify-center text-primary">
+      <CardHeader>
+        <CardDescription className="text-xs font-medium uppercase tracking-wider">
+          {title}
+        </CardDescription>
+        <CardTitle className="text-2xl font-bold tracking-tight">
+          {value}
+        </CardTitle>
+        {description && <CardDescription>{description}</CardDescription>}
+        <CardAction className="flex size-10 items-center justify-center rounded-lg border bg-muted text-muted-foreground">
           {icon}
-        </div>
-      </div>
+        </CardAction>
+      </CardHeader>
     </Card>
   );
 }

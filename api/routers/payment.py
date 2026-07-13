@@ -29,8 +29,10 @@ import os
 from datetime import datetime, timezone, timedelta
 
 import httpx
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel as PydanticBase
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -40,7 +42,7 @@ from config.plans import get_package
 from database import get_db
 from models import Payment, User
 
-router = APIRouter()
+router = APIRouter(prefix="/api", tags=["payment"])
 
 # ── SSE Queue (in-memory) ─────────────────────────────────────────────────────
 # payment_id → asyncio.Queue yang menerima push status dari webhook.
@@ -55,18 +57,25 @@ active_connections: dict[str, asyncio.Queue] = {}
 # Event Mayar yang dianggap pembayaran sukses.
 # String kosong ("") dimasukkan karena beberapa versi Mayar tidak menyertakan
 # field 'event' saat tes webhook manual dari dashboard — hapus setelah produksi.
-PAYMENT_SUCCESS_EVENTS: frozenset[str] = frozenset({"payment.received", "payment.success", "payment.paid", ""})
-PAYMENT_CANCEL_EVENTS:  frozenset[str] = frozenset({"payment.failed", "payment.cancelled"})
+PAYMENT_SUCCESS_EVENTS: frozenset[str] = frozenset(
+    {"payment.received", "payment.success", "payment.paid", ""}
+)
+PAYMENT_CANCEL_EVENTS: frozenset[str] = frozenset(
+    {"payment.failed", "payment.cancelled"}
+)
 
 
 # ── Request Schema ────────────────────────────────────────────────────────────
 
+
 class PaymentCreateRequest(PydanticBase):
     """Body request untuk membuat transaksi baru."""
+
     package: str  # "starter" | "standard" | "bulk"
 
 
 # ── Private Helpers ───────────────────────────────────────────────────────────
+
 
 async def _call_mayar_create_qris(
     payment_id: str,
@@ -106,25 +115,26 @@ async def _call_mayar_create_qris(
                 "description": f"[{payment_id}] Token {label} ResearchBuilder",
                 "customer": {
                     "name": user_id,  # Sisipkan user_id
-                    "email": "user@researchbuilder.local", 
-                    "phone": "08111111111" 
+                    "email": "user@researchbuilder.local",
+                    "phone": "08111111111",
                 },
-                "metadata": {
-                    "user_id": user_id,
-                    "payment_id": payment_id
-                }
+                "metadata": {"user_id": user_id, "payment_id": payment_id},
             },
             headers=headers,
             timeout=15.0,
         )
 
     if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"Mayar QRIS API error: {resp.text}")
+        raise HTTPException(
+            status_code=502, detail=f"Mayar QRIS API error: {resp.text}"
+        )
 
     data = resp.json().get("data", {})
     qr_url = data.get("url")
     if not qr_url:
-        raise HTTPException(status_code=502, detail="Mayar QRIS response missing QR URL")
+        raise HTTPException(
+            status_code=502, detail="Mayar QRIS response missing QR URL"
+        )
 
     return qr_url, data.get("id", "")
 
@@ -151,9 +161,13 @@ def _find_matching_payment(db: Session, data: dict) -> Payment | None:
     # Lapisan 1: productId — ID produk QRIS yang disimpan saat checkout dibuat
     product_id = data.get("productId")
     if product_id:
-        payment = db.query(Payment).filter(
-            Payment.mayar_payment_id == product_id,
-        ).first()
+        payment = (
+            db.query(Payment)
+            .filter(
+                Payment.mayar_payment_id == product_id,
+            )
+            .first()
+        )
         if payment:
             print(f"[WEBHOOK] Matched by productId={product_id}", flush=True)
             return payment
@@ -166,9 +180,13 @@ def _find_matching_payment(db: Session, data: dict) -> Payment | None:
         or data.get("referenceId")
     )
     if mayar_txn_id:
-        payment = db.query(Payment).filter(
-            Payment.mayar_payment_id == mayar_txn_id,
-        ).first()
+        payment = (
+            db.query(Payment)
+            .filter(
+                Payment.mayar_payment_id == mayar_txn_id,
+            )
+            .first()
+        )
         if payment:
             print(f"[WEBHOOK] Matched by mayar_txn_id={mayar_txn_id}", flush=True)
             return payment
@@ -180,12 +198,19 @@ def _find_matching_payment(db: Session, data: dict) -> Payment | None:
         try:
             internal_id = description.split("[")[1].split("]")[0].strip()
             if internal_id:
-                payment = db.query(Payment).filter(
-                    Payment.id == internal_id,
-                    Payment.status == "pending",
-                ).first()
+                payment = (
+                    db.query(Payment)
+                    .filter(
+                        Payment.id == internal_id,
+                        Payment.status == "pending",
+                    )
+                    .first()
+                )
                 if payment:
-                    print(f"[WEBHOOK] Matched by description internal_id={internal_id}", flush=True)
+                    print(
+                        f"[WEBHOOK] Matched by description internal_id={internal_id}",
+                        flush=True,
+                    )
                     return payment
         except (IndexError, ValueError):
             pass
@@ -195,12 +220,19 @@ def _find_matching_payment(db: Session, data: dict) -> Payment | None:
     if isinstance(metadata, dict):
         meta_payment_id = metadata.get("payment_id")
         if meta_payment_id:
-            payment = db.query(Payment).filter(
-                Payment.id == meta_payment_id,
-                Payment.status == "pending",
-            ).first()
+            payment = (
+                db.query(Payment)
+                .filter(
+                    Payment.id == meta_payment_id,
+                    Payment.status == "pending",
+                )
+                .first()
+            )
             if payment:
-                print(f"[WEBHOOK] Matched by metadata payment_id={meta_payment_id}", flush=True)
+                print(
+                    f"[WEBHOOK] Matched by metadata payment_id={meta_payment_id}",
+                    flush=True,
+                )
                 return payment
 
     return None
@@ -208,7 +240,8 @@ def _find_matching_payment(db: Session, data: dict) -> Payment | None:
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
-@router.post("/api/payment/create")
+
+@router.post("/payment/create")
 async def create_payment_link(
     req: PaymentCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -234,7 +267,7 @@ async def create_payment_link(
 
     amount = pkg["price"]
     tokens = pkg["tokens"]
-    label  = pkg["label"]
+    label = pkg["label"]
 
     payment = Payment(
         user_id=current_user.id,
@@ -254,7 +287,10 @@ async def create_payment_link(
         payment.status = "paid"
         current_user.tokens_purchased += tokens
         db.commit()
-        print(f"[PAYMENT] Mock mode — payment_id={payment.id} +{tokens} tokens", flush=True)
+        print(
+            f"[PAYMENT] Mock mode — payment_id={payment.id} +{tokens} tokens",
+            flush=True,
+        )
         return {
             "payment_id": payment.id,
             "qr_url": None,
@@ -295,7 +331,7 @@ async def create_payment_link(
         raise HTTPException(status_code=500, detail=f"Error membuat QRIS: {str(e)}")
 
 
-@router.get("/api/payment/{payment_id}/status")
+@router.get("/payment/{payment_id}/status")
 async def payment_status(
     payment_id: str,
     current_user: User = Depends(get_current_user),
@@ -310,10 +346,14 @@ async def payment_status(
     Returns:
         { status: "pending"|"paid"|"expired", tokens_added: int }
     """
-    payment = db.query(Payment).filter(
-        Payment.id == payment_id,
-        Payment.user_id == current_user.id,
-    ).first()
+    payment = (
+        db.query(Payment)
+        .filter(
+            Payment.id == payment_id,
+            Payment.user_id == current_user.id,
+        )
+        .first()
+    )
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
 
@@ -333,7 +373,7 @@ async def payment_status(
     return {"status": payment.status, "tokens_added": payment.tokens_added}
 
 
-@router.get("/api/payment-stream/{payment_id}")
+@router.get("/payment-stream/{payment_id}")
 async def payment_stream(
     payment_id: str,
     token: str,
@@ -353,10 +393,14 @@ async def payment_stream(
     if not user_id:
         raise HTTPException(status_code=401, detail="Token tidak valid")
 
-    payment = db.query(Payment).filter(
-        Payment.id == payment_id,
-        Payment.user_id == user_id,
-    ).first()
+    payment = (
+        db.query(Payment)
+        .filter(
+            Payment.id == payment_id,
+            Payment.user_id == user_id,
+        )
+        .first()
+    )
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
 
@@ -382,7 +426,7 @@ async def payment_stream(
     )
 
 
-@router.post("/api/webhook/mayar")
+@router.post("/webhook/mayar")
 async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
     """
     Callback dari Mayar — dipanggil otomatis saat pembayaran sukses atau gagal.
@@ -399,11 +443,10 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
     body = await request.body()
 
     # ── Verifikasi Signature ──────────────────────────────────────────────────
-    signature      = request.headers.get("x-mayar-signature")
+    signature = request.headers.get("x-mayar-signature")
     webhook_secret = os.getenv("MAYAR_WEBHOOK_SECRET")
-    allow_mock     = (
-        request.headers.get("x-mock-payment") == "true"
-        and not os.getenv("MAYAR_API_KEY")
+    allow_mock = request.headers.get("x-mock-payment") == "true" and not os.getenv(
+        "MAYAR_API_KEY"
     )
 
     try:
@@ -438,11 +481,13 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
     event = payload.get("event", "")
-    data  = payload.get("data", {})
+    data = payload.get("data", {})
 
     mayar_txn_id = (
-        data.get("id") or data.get("transactionId")
-        or data.get("paymentId") or data.get("referenceId")
+        data.get("id")
+        or data.get("transactionId")
+        or data.get("paymentId")
+        or data.get("referenceId")
     )
     print(
         f"[WEBHOOK] event={event!r} | mayar_txn_id={mayar_txn_id} | "
@@ -460,7 +505,10 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
         )
         return {"status": "ok", "message": "No matching pending payment found"}
 
-    print(f"[WEBHOOK] Matched payment_id={payment.id} | status={payment.status}", flush=True)
+    print(
+        f"[WEBHOOK] Matched payment_id={payment.id} | status={payment.status}",
+        flush=True,
+    )
 
     # ── Klasifikasi Event ─────────────────────────────────────────────────────
     if event in PAYMENT_CANCEL_EVENTS:
@@ -514,10 +562,13 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
     else:
         print(f"[WEBHOOK] No SSE for {payment.id} — polling will detect it", flush=True)
 
-    return {"status": "success", "message": f"Berhasil memproses {payment.tokens_added} token"}
+    return {
+        "status": "success",
+        "message": f"Berhasil memproses {payment.tokens_added} token",
+    }
 
 
-@router.get("/api/payments/history")
+@router.get("/payments/history")
 async def api_payment_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -535,7 +586,7 @@ async def api_payment_history(
         List of { id (8-char display), tokens_added, amount, status, created_at }
     """
     page_size = min(max(page_size, 1), 50)  # clamp: 1–50
-    offset    = (page - 1) * page_size
+    offset = (page - 1) * page_size
 
     payments = (
         db.query(Payment)
@@ -547,7 +598,7 @@ async def api_payment_history(
     )
     return [
         {
-            "id": p.id[:8],          # Truncate untuk display — bukan untuk lookup
+            "id": p.id[:8],  # Truncate untuk display — bukan untuk lookup
             "tokens_added": p.tokens_added,
             "amount": p.amount,
             "status": p.status,
@@ -555,3 +606,88 @@ async def api_payment_history(
         }
         for p in payments
     ]
+
+
+@router.get("/payment/mock-checkout", response_class=HTMLResponse)
+async def mock_checkout_page(payment_id: str, package: str, email: str, redirect_url: Optional[str] = "/"):
+    pkg = get_package(package) or {"label": package, "price": 0, "tokens": 0}
+    pkg_label = pkg["label"]
+    amount = pkg["price"]
+    tokens = pkg["tokens"]
+    amount_str = f"Rp {amount:,}".replace(",", ".")
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResearchBuilder — Sandboxed Checkout</title>
+    <style>
+        :root {{
+            --bg-main: #f8fafc; --bg-card: #ffffff; --border-color: #e2e8f0;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --color-primary: #4f46e5; --color-primary-hover: #4338ca; --color-success: #16a34a;
+        }}
+        @media (prefers-color-scheme: dark) {{
+            :root {{
+                --bg-main: #09090b; --bg-card: #18181b; --border-color: #27272a;
+                --text-primary: #fafafa; --text-secondary: #a1a1aa; --text-muted: #71717a;
+            }}
+        }}
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{ background: var(--bg-main); color: var(--text-primary); font-family: system-ui, sans-serif;
+               display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }}
+        .card {{ width: 100%; max-width: 420px; background: var(--bg-card); border: 1px solid var(--border-color);
+                border-radius: 8px; padding: 32px; text-align: center; }}
+        .badge {{ display: inline-flex; gap: 6px; background: rgba(79,70,229,0.1); color: var(--color-primary);
+                 border: 1px solid rgba(79,70,229,0.2); font-size: 10px; font-weight: 700; padding: 3px 10px;
+                 border-radius: 4px; text-transform: uppercase; margin-bottom: 20px; }}
+        h2 {{ font-size: 1.25rem; font-weight: 800; margin-bottom: 6px; }}
+        .desc {{ color: var(--text-muted); font-size: 0.75rem; margin-bottom: 24px; }}
+        .details {{ background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px;
+                   padding: 16px; text-align: left; margin-bottom: 24px; font-size: 0.8125rem; }}
+        .row {{ display: flex; justify-content: space-between; margin-bottom: 10px; }}
+        .row:last-child {{ margin-bottom: 0; padding-top: 10px; border-top: 1px solid var(--border-color); font-weight: 700; }}
+        .label {{ color: var(--text-secondary); font-size: 0.75rem; }}
+        .value {{ color: var(--text-primary); font-size: 0.8125rem; font-weight: 500; }}
+        .highlight {{ color: var(--color-primary); font-weight: 700; }}
+        .btn {{ width: 100%; background: var(--color-primary); color: #fff; border: none; padding: 10px 16px;
+               font-weight: 600; font-size: 0.8125rem; border-radius: 6px; cursor: pointer; }}
+        .btn:hover {{ background: var(--color-primary-hover); }}
+        .btn-cancel {{ background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border-color); margin-top: 8px; }}
+        .status {{ display: none; margin-top: 16px; padding: 10px; border-radius: 6px; font-size: 0.8125rem;
+                  background: rgba(22,163,74,0.1); border: 1px solid rgba(22,163,74,0.2); color: var(--color-success); }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <span class="badge">Sandbox Mode</span>
+        <h2>Simulasi Pembayaran</h2>
+        <p class="desc">Gerbang pembayaran tiruan untuk pengujian lokal</p>
+        <div class="details">
+            <div class="row"><span class="label">Produk</span><span class="value">Token {pkg_label} ({tokens:,} token)</span></div>
+            <div class="row"><span class="label">Email</span><span class="value">{email}</span></div>
+            <div class="row"><span class="label">ID Transaksi</span><span class="value" style="font-family:monospace;font-size:0.75rem">{payment_id}</span></div>
+            <div class="row"><span class="label">Total</span><span class="value highlight">{amount_str}</span></div>
+        </div>
+        <button id="btn-pay" class="btn">Bayar Sekarang</button>
+        <button id="btn-cancel" class="btn btn-cancel" onclick="location.href='{redirect_url}'">Batal</button>
+        <div id="status" class="status">Pembayaran Berhasil! Mengalihkan...</div>
+    </div>
+    <script>
+        document.getElementById('btn-pay').addEventListener('click', async function() {{
+            this.disabled = true; this.textContent = 'Memproses...';
+            try {{
+                const r = await fetch('/api/webhook/mayar', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json', 'x-mock-payment': 'true'}},
+                    body: JSON.stringify({{event: "payment.success", data: {{paymentId: "{payment_id}", amount: {amount}, customer: {{email: "{email}"}}}}}})
+                }});
+                if (r.ok) {{ document.getElementById('status').style.display = 'block'; setTimeout(() => location.href = "{redirect_url}", 2000); }}
+                else {{ throw new Error('Failed'); }}
+            }} catch(e) {{ alert('Gagal: ' + e.message); this.disabled = false; this.textContent = 'Bayar Sekarang'; }}
+        }});
+    </script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)

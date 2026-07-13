@@ -99,9 +99,43 @@ def get_current_user_optional(
     return db.query(User).filter(User.id == user_id).first()
 
 
-def check_token_limit(user: User, db: Session) -> None:
-    if user.tokens_balance <= 0:
+def check_token_limit(user: User, db: Session, required: int = 1, operation: str = "") -> None:
+    """
+    Pastikan user punya cukup saldo token SEBELUM memulai operasi.
+
+    Admin selalu lolos (saldo unlimited). Untuk user biasa, kita cek apakah
+    `tokens_balance >= required` — bukan sekadar `> 0` — agar user tidak bisa
+    memulai proses mahal (mis. penulisan artikel ~25k token) dengan sisa saldo
+    kecil, yang pasti gagal / mengering di tengah jalan.
+
+    Raises:
+        HTTPException 402 dengan detail terstruktur (balance, required, shortfall)
+        agar frontend bisa menampilkan pesan tepat + CTA beli token.
+    """
+    if user.is_admin:
+        return
+
+    balance = user.tokens_balance
+    if balance < required:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Saldo token habis. Silakan beli token untuk melanjutkan."
+            detail={
+                "message": (
+                    "Saldo token habis. Silakan beli token untuk melanjutkan."
+                    if balance <= 0
+                    else "Saldo token tidak cukup untuk memulai proses ini. "
+                    "Silakan beli token tambahan."
+                ),
+                "code": "insufficient_tokens",
+                "balance": balance,
+                "required": required,
+                "shortfall": max(0, required - balance),
+                "operation": operation,
+            },
         )
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    return current_user

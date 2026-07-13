@@ -10,6 +10,8 @@ export interface User {
   tokens_balance: number;
   tokens_used: number;
   tokens_purchased: number;
+  role: string;
+  created_at?: string | null;
 }
 
 interface AuthContextType {
@@ -17,7 +19,13 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    fullName: string
+  ) => Promise<{ detail: string; email: string; requires_verification: boolean }>;
+  verifyEmail: (token: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<string>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
   authFetch: (path: string, options?: RequestInit) => Promise<Response>;
@@ -25,7 +33,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : "http://127.0.0.1:8000");
 
 /** Helper untuk menerjemahkan error 422 Pydantic (Bahasa Inggris) ke Bahasa Indonesia */
 function parseValidationError(errObj: any): string {
@@ -155,11 +167,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(errMsg);
     }
 
-    const data = await response.json();
-    localStorage.setItem("token", data.token);
-    setToken(data.token);
-    await fetchUserProfile(data.token);
-    router.push("/");
+    // Tidak auto-login: backend mewajibkan verifikasi email dulu.
+    // Kembalikan payload agar UI bisa tampilkan layar "cek email Anda".
+    return (await response.json()) as {
+      detail: string;
+      email: string;
+      requires_verification: boolean;
+    };
   }
 
   function logout() {
@@ -167,6 +181,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     setUser(null);
     router.push("/login");
+  }
+
+  async function verifyEmail(verifyToken: string) {
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/api/auth/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+        body: JSON.stringify({ token: verifyToken }),
+      });
+    } catch {
+      throw new Error("Server tidak dapat dijangkau. Silakan coba beberapa saat lagi.");
+    }
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(typeof data.detail === "string" ? data.detail : "Verifikasi gagal");
+    }
+    const data = await response.json();
+    localStorage.setItem("token", data.token);
+    setToken(data.token);
+    await fetchUserProfile(data.token);
+  }
+
+  async function resendVerification(email: string): Promise<string> {
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/api/auth/resend-verification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+        body: JSON.stringify({ email }),
+      });
+    } catch {
+      throw new Error("Server tidak dapat dijangkau. Silakan coba beberapa saat lagi.");
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(typeof data.detail === "string" ? data.detail : "Gagal mengirim ulang");
+    }
+    return data.detail as string;
   }
 
   async function refreshProfile() {
@@ -216,6 +269,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         login,
         register,
+        verifyEmail,
+        resendVerification,
         logout,
         refreshProfile,
         authFetch,
