@@ -26,6 +26,14 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Stepper } from "@/components/ui/Stepper";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const STEPS = ["Topik", "Pilih Judul", "Outline", "Penulisan", "Hasil"];
 
@@ -96,6 +104,25 @@ export default function ResearchPage() {
   // Polling cleanup ref
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortedRef = useRef(false);
+
+  const [showPromo, setShowPromo] = useState(false);
+
+  useEffect(() => {
+    // Show promo if they haven't seen it yet
+    const hasSeen = localStorage.getItem("hasSeenPromo");
+    if (!hasSeen) {
+      // Delay slightly for better UX
+      const timer = setTimeout(() => {
+        setShowPromo(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const handleClosePromo = () => {
+    setShowPromo(false);
+    localStorage.setItem("hasSeenPromo", "true");
+  };
 
   useEffect(() => {
     // Reset saat mount — penting untuk React Strict Mode (dev) yang
@@ -776,6 +803,51 @@ export default function ResearchPage() {
           )}
         </div>
       )}
+
+      {/* Promotional Popup */}
+      <Dialog open={showPromo} onOpenChange={setShowPromo}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold text-primary">
+              <Sparkles className="w-5 h-5" />
+              Penawaran Terbatas!
+            </DialogTitle>
+            <DialogDescription className="text-foreground pt-2">
+              Dapatkan pengalaman riset tanpa hambatan! Beli <strong>Paket Standard (200.000 Token)</strong> sekarang dan hasilkan puluhan artikel berkualitas tinggi.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-muted/50 p-4 rounded-lg my-2 border border-border/50">
+            <ul className="space-y-2 text-sm">
+              <li className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                Akses semua fitur AI Research
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                Cukup untuk ~8-10 artikel lengkap
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                Tidak ada masa kedaluwarsa
+              </li>
+            </ul>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0 pt-2">
+            <Button variant="ghost" onClick={handleClosePromo}>
+              Nanti Saja
+            </Button>
+            <Button
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              onClick={() => {
+                handleClosePromo();
+                router.push("/billing");
+              }}
+            >
+              Lihat Paket Token
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
