@@ -181,27 +181,51 @@ export default function BillingPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 items-center max-w-5xl mx-auto py-4">
           {TOKEN_PACKAGES.map((pkg, i) => (
-            <Card key={pkg.key} className={i === 1 ? "ring-2 ring-foreground" : ""}>
-              <CardContent className="pt-6 flex flex-col h-full justify-between">
+            <Card 
+              key={pkg.key} 
+              className={`relative overflow-hidden transition-all duration-300 hover:shadow-xl ${
+                i === 1 
+                  ? "border-primary shadow-lg scale-100 md:scale-110 z-10 bg-gradient-to-b from-primary/10 via-background to-background" 
+                  : "border-border/60 hover:border-primary/40 bg-card"
+              }`}
+            >
+              {i === 1 && (
+                <div className="absolute top-0 inset-x-0 h-1.5 bg-primary" />
+              )}
+              <CardContent className="p-6 md:p-8 flex flex-col h-full justify-between">
                 <div>
-                  {i === 1 && <Badge className="mb-3">Terpopuler</Badge>}
-                  <h3 className="text-sm font-semibold">{pkg.label}</h3>
-                  <p className="text-xs text-muted-foreground mt-1">{pkg.desc}</p>
-                  <div className="mt-4">
-                    <span className="text-2xl font-bold">Rp {pkg.price.toLocaleString()}</span>
+                  {i === 1 && <Badge className="mb-4 bg-primary text-primary-foreground hover:bg-primary shadow-sm border-none px-3 py-1">Terpopuler</Badge>}
+                  <h3 className={`font-extrabold tracking-tight ${i === 1 ? 'text-2xl text-primary' : 'text-xl'}`}>{pkg.label}</h3>
+                  <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">{pkg.desc}</p>
+                  
+                  <div className="my-6">
+                    <span className="text-4xl font-black tracking-tighter text-foreground">
+                      Rp {(pkg.price / 1000).toString()}k
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">{pkg.tokens.toLocaleString()} token</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{pkg.perToken}</p>
+                  
+                  <div className="space-y-2.5 mt-2">
+                    <p className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <Zap className={`w-4 h-4 ${i === 1 ? "text-primary" : "text-muted-foreground"}`} />
+                      {pkg.tokens.toLocaleString()} token
+                    </p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-2">
+                      <Coins className="w-4 h-4 text-muted-foreground/70" />
+                      {pkg.perToken}
+                    </p>
+                  </div>
                 </div>
+                
                 <Button
                   variant={i === 1 ? "default" : "outline"}
-                  className="w-full mt-6"
+                  className={`w-full mt-8 font-bold ${i === 1 ? "shadow-md hover:shadow-lg transition-all" : ""}`}
+                  size="lg"
                   onClick={() => handleBuy(pkg.key)}
                   disabled={buying === pkg.key}
                 >
-                  {buying === pkg.key && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {buying === pkg.key ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                   Beli Token
                 </Button>
               </CardContent>
