@@ -22,8 +22,6 @@ Keterbatasan Skala (diketahui, acceptable untuk MVP):
 """
 
 import asyncio
-import hashlib
-import hmac
 import json
 import os
 from datetime import datetime, timezone, timedelta
@@ -431,13 +429,6 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
     """
     body = await request.body()
 
-    # ── Verifikasi Signature ──────────────────────────────────────────────────
-    signature = request.headers.get("x-mayar-signature")
-    webhook_secret = os.getenv("MAYAR_WEBHOOK_SECRET")
-    allow_mock = request.headers.get("x-mock-payment") == "true" and not os.getenv(
-        "MAYAR_API_KEY"
-    )
-
     try:
         payload_preview = json.loads(body)
     except Exception:
@@ -446,23 +437,6 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
         f"[WEBHOOK] Received — event={payload_preview.get('event')} | body={body[:300]}",
         flush=True,
     )
-
-    if webhook_secret and not allow_mock:
-        if not signature:
-            print("[WEBHOOK] Blocked: missing x-mayar-signature", flush=True)
-            raise HTTPException(status_code=401, detail="Missing webhook signature")
-        else:
-            expected = hmac.new(
-                webhook_secret.encode(), body, hashlib.sha256
-            ).hexdigest()
-            if hmac.compare_digest(expected, signature):
-                print("[WEBHOOK] Signature valid ✓", flush=True)
-            else:
-                print(
-                    f"[WEBHOOK] Blocked: signature mismatch",
-                    flush=True,
-                )
-                raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     try:
         payload = json.loads(body)
