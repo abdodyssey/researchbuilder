@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     
     # Mailer (Resend)
     RESEND_API_KEY: str | None = None
-    EMAIL_FROM: str = "ResearchBuilder <onboarding@resend.dev>"
+    EMAIL_FROM: str = "ResearchBuilder <noreply@rafanovation.cloud>"
     APP_BASE_URL: str = "http://localhost:3000"
 
     model_config = SettingsConfigDict(
