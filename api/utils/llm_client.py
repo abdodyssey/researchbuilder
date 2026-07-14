@@ -114,7 +114,7 @@ def get_usage(pipeline_id: str) -> dict:
         return _usage_store[pipeline_id]
     try:
         from utils.state_manager import load_state
-        output_dir = "/tmp" if os.environ.get("VERCEL") else settings.OUTPUT_DIR
+        output_dir = "/tmp" if os.environ.get("VERCEL") else "./output"
         state = load_state(output_dir, pipeline_id)
         if state and state.token_usage:
             _usage_store[pipeline_id] = state.token_usage
@@ -370,7 +370,7 @@ def extract_json(text: str) -> dict:
                     pass
 
     try:
-        with open(os.path.join(settings.OUTPUT_DIR, "runs", "failed_llm_response.txt"), "w", encoding="utf-8") as f:
+        with open(os.path.join("./output", "runs", "failed_llm_response.txt"), "w", encoding="utf-8") as f:
             f.write(text)
     except Exception:
         pass

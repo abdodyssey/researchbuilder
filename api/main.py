@@ -2,8 +2,6 @@ import argparse
 import os
 import glob
 import json
-from pathlib import Path
-from config.settings import settings
 from orchestrator import run_pipeline
 
 def list_runs(output_dir: str):
@@ -47,8 +45,8 @@ def clean_workspace(output_dir: str):
 def main():
     parser = argparse.ArgumentParser(description="ResearchBuilder - AI Research Article Generator")
     parser.add_argument("--tema", help="Tema umum artikel")
-    parser.add_argument("--bahasa", default=settings.DEFAULT_LANGUAGE, choices=["id", "en"])
-    parser.add_argument("--output", default=settings.OUTPUT_DIR)
+    parser.add_argument("--bahasa", default="id", choices=["id", "en"])
+    parser.add_argument("--output", default="./output")
     parser.add_argument("--resume", action="store_true", help="Resume pipeline yang interrupted")
     parser.add_argument("--clean", action="store_true", help="Bersihkan draf/state lama sebelum run baru")
     parser.add_argument("--list-runs", action="store_true", help="Melihat daftar riwayat pipeline run")

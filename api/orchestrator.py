@@ -180,7 +180,7 @@ def run_pipeline(
                     focused_topic=t["focused_topic"],
                     keywords=t["keywords"],
                     research_questions=t["research_questions"],
-                    max_references=max_references if max_references is not None else settings.MAX_REFERENCES,
+                    max_references=max_references if max_references is not None else 10,
                 )
             )
             state = mark_stage(state, "literature_search", "done", out.model_dump())

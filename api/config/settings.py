@@ -23,18 +23,11 @@ class Settings(BaseSettings):
     
     # Mayar
     MAYAR_API_KEY: str | None = None
-    MAYAR_WEBHOOK_SECRET: str | None = None
     
     # Mailer (Resend)
     RESEND_API_KEY: str | None = None
     EMAIL_FROM: str = "ResearchBuilder <onboarding@resend.dev>"
     APP_BASE_URL: str = "http://localhost:3000"
-    
-    # System settings
-    OUTPUT_DIR: str = "./output"
-    DEFAULT_LANGUAGE: str = "id"
-    MAX_REFERENCES: int = 10
-    ARTICLE_WORD_TARGET: int = 3500
 
     model_config = SettingsConfigDict(
         env_file=(
