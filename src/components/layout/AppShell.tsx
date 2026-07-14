@@ -16,6 +16,7 @@ import {
   ChevronsUpDown,
   UserCircle,
   LayoutDashboard,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -97,6 +98,21 @@ function AppSidebar() {
                 </SidebarMenuItem>
               );
             })}
+            
+            {user.role === "admin" && (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={pathname === "/admin/users"}
+                  tooltip="Manajemen User"
+                  asChild
+                >
+                  <Link href="/admin/users">
+                    <Users className="w-4 h-4" />
+                    <span>Manajemen User</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
