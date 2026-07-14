@@ -26,9 +26,7 @@ import re
 import time
 
 import httpx
-from dotenv import load_dotenv
-
-load_dotenv()
+from config.settings import settings
 
 API_URL = "https://api.semanticscholar.org/graph/v1/paper/search"
 
@@ -49,7 +47,7 @@ _RETRY_BACKOFF = 4.0  # detik; dikali (attempt+1) untuk 429
 def _headers() -> dict:
     """Header request. Sertakan x-api-key hanya jika env tersedia."""
     headers = {"User-Agent": "ResearchBuilder/1.0"}
-    api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
+    api_key = settings.SEMANTIC_SCHOLAR_API_KEY
     if api_key:
         headers["x-api-key"] = api_key
     return headers

@@ -21,10 +21,7 @@ import re
 import threading
 
 import groq
-from dotenv import load_dotenv
-from groq import Groq
-
-load_dotenv()
+from config.settings import settings
 
 # Lazy-initialized Groq client (singleton pattern)
 _client = None
@@ -33,8 +30,7 @@ def get_client():
     """Inisialisasi Groq client hanya saat pertama dipanggil (lazy init)."""
     global _client
     if _client is None:
-        api_key = os.getenv("GROQ_API_KEY", "missing_api_key_on_vercel")
-        _client = Groq(api_key=api_key)
+        _client = Groq(api_key=settings.GROQ_API_KEY)
     return _client
 
 # Thread-local storage untuk pipeline_id aktif dan model saat ini.
@@ -118,7 +114,7 @@ def get_usage(pipeline_id: str) -> dict:
         return _usage_store[pipeline_id]
     try:
         from utils.state_manager import load_state
-        output_dir = "/tmp" if os.environ.get("VERCEL") else os.getenv("OUTPUT_DIR", "./output")
+        output_dir = "/tmp" if os.environ.get("VERCEL") else settings.OUTPUT_DIR
         state = load_state(output_dir, pipeline_id)
         if state and state.token_usage:
             _usage_store[pipeline_id] = state.token_usage
@@ -132,7 +128,7 @@ def get_current_model() -> str:
     """Ambil model LLM aktif di thread ini (default dari env GROQ_MODEL)."""
     model = getattr(_thread_local, "current_model", None)
     if model is None:
-        model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        model = settings.GROQ_MODEL
         _thread_local.current_model = model
     return model
 
@@ -374,7 +370,7 @@ def extract_json(text: str) -> dict:
                     pass
 
     try:
-        with open(os.path.join(os.getenv("OUTPUT_DIR", "./output"), "runs", "failed_llm_response.txt"), "w", encoding="utf-8") as f:
+        with open(os.path.join(settings.OUTPUT_DIR, "runs", "failed_llm_response.txt"), "w", encoding="utf-8") as f:
             f.write(text)
     except Exception:
         pass

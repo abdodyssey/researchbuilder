@@ -25,7 +25,7 @@ File ini dipanggil oleh:
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+from config.settings import settings
 from rich.console import Console
 
 import agents.literature_search as a2
@@ -48,7 +48,6 @@ from tools.file_writer import write_article, write_references
 from utils.llm_client import set_active_pipeline_id
 from utils.state_manager import create_pipeline, load_state, mark_stage, save_state
 
-load_dotenv()
 console = Console()
 
 
@@ -181,7 +180,7 @@ def run_pipeline(
                     focused_topic=t["focused_topic"],
                     keywords=t["keywords"],
                     research_questions=t["research_questions"],
-                    max_references=max_references if max_references is not None else int(os.getenv("MAX_REFERENCES", 10)),
+                    max_references=max_references if max_references is not None else settings.MAX_REFERENCES,
                 )
             )
             state = mark_stage(state, "literature_search", "done", out.model_dump())

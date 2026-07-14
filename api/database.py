@@ -10,19 +10,12 @@ Environment:
 
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base
-from dotenv import load_dotenv
 import os
-
-# Muat .env sedini mungkin — modul ini membaca DATABASE_URL saat import,
-# jadi env harus tersedia sebelum engine dibuat (jangan bergantung pada
-# pemanggil yang kebetulan sudah load_dotenv lebih dulu).
-load_dotenv()
+from config.settings import settings
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL environment variable is required")
+DATABASE_URL = settings.DATABASE_URL
 
 
 def _normalize_pg_url(url: str) -> str:

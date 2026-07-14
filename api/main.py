@@ -3,10 +3,8 @@ import os
 import glob
 import json
 from pathlib import Path
-from dotenv import load_dotenv
+from config.settings import settings
 from orchestrator import run_pipeline
-
-load_dotenv()
 
 def list_runs(output_dir: str):
     run_files = glob.glob(os.path.join(output_dir, "runs", "pipeline_state_*.json"))
@@ -49,8 +47,8 @@ def clean_workspace(output_dir: str):
 def main():
     parser = argparse.ArgumentParser(description="ResearchBuilder - AI Research Article Generator")
     parser.add_argument("--tema", help="Tema umum artikel")
-    parser.add_argument("--bahasa", default=os.getenv("DEFAULT_LANGUAGE", "id"), choices=["id", "en"])
-    parser.add_argument("--output", default=os.getenv("OUTPUT_DIR", "./output"))
+    parser.add_argument("--bahasa", default=settings.DEFAULT_LANGUAGE, choices=["id", "en"])
+    parser.add_argument("--output", default=settings.OUTPUT_DIR)
     parser.add_argument("--resume", action="store_true", help="Resume pipeline yang interrupted")
     parser.add_argument("--clean", action="store_true", help="Bersihkan draf/state lama sebelum run baru")
     parser.add_argument("--list-runs", action="store_true", help="Melihat daftar riwayat pipeline run")

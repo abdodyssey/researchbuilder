@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_user, decode_token
 from config.plans import get_package
+from config.settings import settings
 from database import get_db
 from models import Payment, User
 
@@ -250,10 +251,7 @@ async def create_payment_link(
     tokens = pkg["tokens"]
     label = pkg["label"]
 
-    # ── Cek API Key SEBELUM membuat record DB ─────────────────────────────────
-    # Penting: jika dicek sesudah INSERT, kegagalan di sini meninggalkan
-    # Payment record orphan (status=pending, tidak pernah expire).
-    mayar_api_key = os.getenv("MAYAR_API_KEY")
+    mayar_api_key = settings.MAYAR_API_KEY
     if not mayar_api_key:
         raise HTTPException(
             status_code=503,

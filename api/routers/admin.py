@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from auth import require_admin
+from config.settings import settings
 from database import get_db
 from models import User
 
@@ -108,8 +109,8 @@ async def admin_stats(
     total_tokens = db.query(func.sum(User.tokens_used)).scalar() or 0
     total_docs = db.query(func.count(ResearchJob.id)).filter(ResearchJob.pipeline_data.isnot(None)).scalar()
     
-    groq_key = os.getenv("GROQ_API_KEY")
-    ss_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
+    groq_key = settings.GROQ_API_KEY if settings.GROQ_API_KEY != "missing_api_key_on_vercel" else None
+    ss_key = settings.SEMANTIC_SCHOLAR_API_KEY
     
     return {
         "total_users": total_users,

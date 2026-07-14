@@ -23,26 +23,9 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
-_raw_secret = os.getenv("SECRET_KEY", "")
-if not _raw_secret:
-    # Di development: generate key acak per-process (tidak persisten, JWT hangus saat restart).
-    # Di produksi: wajib set SECRET_KEY di environment — jika tidak, server tidak boleh jalan.
-    import secrets as _secrets
-    _is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
-    if _is_production:
-        raise RuntimeError(
-            "SECRET_KEY environment variable wajib di-set di produksi. "
-            "Generate dengan: python -c \"import secrets; print(secrets.token_hex(32))\""
-        )
-    import warnings
-    warnings.warn(
-        "SECRET_KEY tidak di-set — menggunakan key acak sementara (dev only). "
-        "JWT akan hangus setiap restart server. Set SECRET_KEY di .env untuk menghindari ini.",
-        stacklevel=2,
-    )
-    _raw_secret = _secrets.token_hex(32)
+from config.settings import settings
 
-SECRET_KEY = _raw_secret
+SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 

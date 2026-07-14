@@ -10,7 +10,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 
 from database import init_db
 from routers.admin import router as admin_router
@@ -18,10 +17,6 @@ from routers.auth import router as auth_router
 from routers.payment import router as payment_router
 from routers.research import router as research_router
 from routers.runs import router as runs_router
-
-# Load .env dari parent directory — robust terhadap working directory berbeda
-env_path = Path(__file__).parent.parent / ".env"
-load_dotenv(dotenv_path=env_path, override=True)
 
 app = FastAPI(title="ResearchBuilder API")
 

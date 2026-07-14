@@ -5,8 +5,9 @@ Imported by routers and background tasks.
 
 import os
 from pathlib import Path
+from config.settings import settings
 
-OUTPUT_DIR = os.getenv("OUTPUT_DIR", "./output")
+OUTPUT_DIR = settings.OUTPUT_DIR
 Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 Path(os.path.join(OUTPUT_DIR, "runs")).mkdir(parents=True, exist_ok=True)
 

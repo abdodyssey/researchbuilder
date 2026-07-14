@@ -23,14 +23,13 @@ import os
 
 import httpx
 
+from config.settings import settings
+
 RESEND_API_URL = "https://api.resend.com/emails"
 
 
 def _config() -> tuple[str | None, str, str]:
-    api_key = os.getenv("RESEND_API_KEY")
-    email_from = os.getenv("EMAIL_FROM", "ResearchBuilder <onboarding@resend.dev>")
-    app_base_url = os.getenv("APP_BASE_URL", "http://localhost:3000")
-    return api_key, email_from, app_base_url
+    return settings.RESEND_API_KEY, settings.EMAIL_FROM, settings.APP_BASE_URL
 
 
 def send_verification_email(to_email: str, full_name: str, token: str) -> bool:
