@@ -69,6 +69,7 @@ async def _call_mayar_create_qris(
             "https://api.mayar.id/hl/v1/qrcode/create",
             json={
                 "amount": amount,
+                "name": f"[{payment_id}] Token {label} ResearchBuilder",
                 "description": f"[{payment_id}] Token {label} ResearchBuilder",
                 "customer": {
                     "name": user_id,  # Sisipkan user_id
@@ -137,30 +138,31 @@ def _find_matching_payment(db: Session, data: dict) -> Payment | None:
             print(f"[WEBHOOK] Matched by mayar_txn_id={mayar_txn_id}", flush=True)
             return payment
 
-    # Lapisan 3: parse internal payment.id dari description
+    # Lapisan 3: parse internal payment.id dari description/name/message
     # Format: "[{payment.id}] Token {label} ResearchBuilder"
-    # Mayar mengirim field ini sebagai 'description' ATAU 'productDescription'
-    description = data.get("description") or data.get("productDescription") or ""
-    if description.startswith("["):
-        try:
-            internal_id = description.split("[")[1].split("]")[0].strip()
-            if internal_id:
-                payment = (
-                    db.query(Payment)
-                    .filter(
-                        Payment.id == internal_id,
-                        Payment.status == "pending",
+    # Mayar mengirim field ini sebagai 'description', 'productDescription', dll.
+    for field_name in ("description", "productDescription", "productName", "name", "message"):
+        val = data.get(field_name) or ""
+        if isinstance(val, str) and "[" in val and "]" in val:
+            try:
+                internal_id = val.split("[")[1].split("]")[0].strip()
+                if internal_id:
+                    payment = (
+                        db.query(Payment)
+                        .filter(
+                            Payment.id == internal_id,
+                            Payment.status == "pending",
+                        )
+                        .first()
                     )
-                    .first()
-                )
-                if payment:
-                    print(
-                        f"[WEBHOOK] Matched by description internal_id={internal_id}",
-                        flush=True,
-                    )
-                    return payment
-        except (IndexError, ValueError):
-            pass
+                    if payment:
+                        print(
+                            f"[WEBHOOK] Matched by field {field_name} containing internal_id={internal_id}",
+                            flush=True,
+                        )
+                        return payment
+            except (IndexError, ValueError):
+                pass
 
     # Lapisan 4: Fallback ke metadata custom user_id/payment_id jika di-echo oleh Mayar
     metadata = data.get("metadata", {})
@@ -181,6 +183,52 @@ def _find_matching_payment(db: Session, data: dict) -> Payment | None:
                     flush=True,
                 )
                 return payment
+
+    # Lapisan 5: Fallback pencocokan berdasarkan amount + kedekatan waktu (Sangat penting untuk Dynamic QRIS)
+    webhook_amount = data.get("amount") or data.get("paymentLinkAmount")
+    if webhook_amount:
+        try:
+            amount_val = int(webhook_amount)
+            pending_payments = (
+                db.query(Payment)
+                .filter(
+                    Payment.status == "pending",
+                    Payment.amount == amount_val,
+                )
+                .all()
+            )
+            if pending_payments:
+                webhook_time_str = data.get("createdAt")
+                webhook_time = None
+                if webhook_time_str:
+                    try:
+                        clean_str = webhook_time_str.replace("Z", "+00:00")
+                        webhook_time = datetime.fromisoformat(clean_str).replace(tzinfo=None)
+                    except Exception:
+                        pass
+                
+                if not webhook_time:
+                    webhook_time = datetime.now(timezone.utc).replace(tzinfo=None)
+
+                best_payment = None
+                min_diff = None
+                for p in pending_payments:
+                    if p.created_at:
+                        diff = abs((p.created_at - webhook_time).total_seconds())
+                        if min_diff is None or diff < min_diff:
+                            min_diff = diff
+                            best_payment = p
+
+                # Toleransi selisih waktu maksimal 20 menit (1200 detik)
+                if best_payment and min_diff < 1200:
+                    print(
+                        f"[WEBHOOK] Matched by amount fallback. payment_id={best_payment.id} | "
+                        f"diff={min_diff:.1f}s | amount={amount_val}",
+                        flush=True,
+                    )
+                    return best_payment
+        except Exception as e:
+            print(f"[WEBHOOK] Error in amount fallback matching: {e}", flush=True)
 
     return None
 
@@ -345,7 +393,7 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
     except Exception:
         payload_preview = {}
     print(
-        f"[WEBHOOK] Received — event={payload_preview.get('event')} | body={body[:300]}",
+        f"[WEBHOOK] Received — event={payload_preview.get('event')} | body={body.decode('utf-8', errors='ignore')}",
         flush=True,
     )
 
