@@ -2,7 +2,7 @@
 Research Store — Persistensi State Riset ke Database
 =====================================================
 Menggantikan penyimpanan berbasis file JSON (research_*.json + pipeline_state_*.json)
-dengan satu tabel `research_jobs` di database (SQLite lokal / Neon Postgres produksi).
+dengan satu tabel `research_jobs` di database (Neon Postgres produksi).
 
 Kenapa:
 - File JSON nempel ke satu filesystem → tidak bisa horizontal scale, hilang di
