@@ -27,6 +27,7 @@ app = FastAPI(title="ResearchBuilder API")
 
 ALLOWED_ORIGINS = [
     "https://researchbuilder.rafanovation.cloud",
+    "https://researchbuilder.vercel.app",
     "http://localhost:3000",   # dev
 ]
 
