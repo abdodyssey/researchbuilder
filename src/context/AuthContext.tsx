@@ -36,7 +36,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   (typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    ? "https://heterogenetically-unresistive-nell.ngrok-free.dev"
     : "http://127.0.0.1:8000");
 
 /** Helper untuk menerjemahkan error 422 Pydantic (Bahasa Inggris) ke Bahasa Indonesia */
