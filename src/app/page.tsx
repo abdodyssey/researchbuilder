@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 
 export default function LandingPage() {
   const { token, user, loading, logout } = useAuth();
@@ -131,7 +132,7 @@ export default function LandingPage() {
                   <LayoutDashboard className="w-4 h-4 mr-2" />
                   Aplikasi
                 </Button>
-                <Button variant="ghost" size="sm" onClick={logout}>
+                <Button variant="ghost" size="sm" onClick={logout} className="hover:text-destructive hover:bg-destructive/10">
                   Keluar
                 </Button>
               </div>
@@ -385,8 +386,8 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <span>&copy; {new Date().getFullYear()} ResearchBuilder. Hak Cipta Dilindungi.</span>
           <div className="flex gap-4">
-            <a href="#" className="hover:text-foreground">Syarat & Ketentuan</a>
-            <a href="#" className="hover:text-foreground">Kebijakan Privasi</a>
+            <Link href="/terms" className="hover:text-foreground">Syarat & Ketentuan</Link>
+            <Link href="/privacy" className="hover:text-foreground">Kebijakan Privasi</Link>
           </div>
         </div>
       </footer>

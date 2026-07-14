@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, FileText, Database, Activity, Cpu } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, FileText, Database, Activity, Cpu, Plus, FilePlus } from "lucide-react";
+import Link from "next/link";
 
 interface AdminStats {
   total_users: number;
@@ -62,15 +64,13 @@ export default function DashboardPage() {
   // --- ADMIN DASHBOARD ---
   if (user.role === "admin") {
     return (
-      <div className="p-6 md:p-8 space-y-8 max-w-6xl mx-auto">
+      <div className="p-6 md:p-8 max-w-6xl mx-auto w-full space-y-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard Admin</h1>
-          <p className="text-muted-foreground mt-2">
-            Ringkasan statistik penggunaan platform dan status koneksi API eksternal.
-          </p>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard Admin</h2>
+          <p className="text-sm text-muted-foreground mt-1">Ringkasan transaksi dan penggunaan platform.</p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Pengguna</CardTitle>
@@ -78,6 +78,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{adminStats?.total_users || 0}</div>
+              <p className="text-xs text-muted-foreground mt-1">Akun terdaftar</p>
             </CardContent>
           </Card>
           
@@ -88,6 +89,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{adminStats?.total_documents || 0}</div>
+              <p className="text-xs text-muted-foreground mt-1">Artikel riset terekspor</p>
             </CardContent>
           </Card>
 
@@ -176,6 +178,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{user.tokens_used.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">Total token digunakan</p>
           </CardContent>
         </Card>
 
@@ -186,9 +189,44 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{userDocCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">Artikel riset Anda</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Empty State / CTA block */}
+      {userDocCount === 0 ? (
+        <Card className="mt-8 border-none bg-muted/30 shadow-none">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-12 h-12 rounded-xl bg-background border flex items-center justify-center mb-6 shadow-sm">
+              <FilePlus className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-bold mb-2 tracking-tight">Siap Menulis Artikel?</h2>
+            <p className="text-muted-foreground mb-8 max-w-sm mx-auto text-sm">
+              Mulai susun draf akademis pertamamu dan maksimalkan kuota token yang tersedia.
+            </p>
+            <Link href="/research">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Buat Artikel Baru
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="mt-8 flex items-center justify-between border-t pt-8">
+          <div>
+            <h3 className="text-lg font-semibold tracking-tight">Ingin menulis lagi?</h3>
+            <p className="text-sm text-muted-foreground">Mulai penyusunan draf artikel akademis baru.</p>
+          </div>
+          <Link href="/research">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Buat Artikel Baru
+            </Button>
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

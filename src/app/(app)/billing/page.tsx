@@ -23,6 +23,7 @@ const TOKEN_PACKAGES = [
   { key: "starter",  label: "Starter",  tokens: 50000,  price: 15000, desc: "Untuk mencoba fitur utama",     perToken: "Rp 300 / 1k token" },
   { key: "standard", label: "Standard", tokens: 200000, price: 50000, desc: "Untuk penulisan reguler",        perToken: "Rp 250 / 1k token" },
   { key: "bulk",     label: "Bulk",     tokens: 600000, price: 120000, desc: "Untuk penggunaan intensif",     perToken: "Rp 200 / 1k token" },
+  { key: "test_dev", label: "Test 1K",  tokens: 5000,   price: 1000,  desc: "Khusus untuk Developer/Admin",   perToken: "Rp 200 / 1k token" },
 ];
 
 interface Invoice {
@@ -112,10 +113,9 @@ export default function BillingPage() {
   const totalTokensFromRuns = (runs ?? []).reduce((sum, r) => sum + r.token_usage_total, 0);
 
   return (
-    <div className="p-6 md:p-10 max-w-5xl mx-auto w-full space-y-8">
-      {/* Header */}
+    <div className="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-8">
       <div>
-        <h2 className="text-xl font-bold tracking-tight">Token & Tagihan</h2>
+        <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Token & Tagihan</h2>
         <p className="text-sm text-muted-foreground mt-1">Kelola saldo token, beli paket, dan lihat riwayat penggunaan.</p>
       </div>
 
@@ -181,33 +181,38 @@ export default function BillingPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-          {TOKEN_PACKAGES.map((pkg, i) => (
+        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${user.role === 'admin' || user.email.includes('dummy') ? 'xl:grid-cols-4' : ''} gap-4 lg:gap-6 items-stretch`}>
+          {TOKEN_PACKAGES.filter(p => p.key !== "test_dev" || user.role === "admin" || user.email.includes("dummy")).map((pkg, i) => (
             <Card 
               key={pkg.key} 
-              className={`flex flex-col h-full ${i === 1 ? "border-primary shadow-sm" : ""}`}
+              className={`flex flex-col relative overflow-hidden transition-all duration-200 hover:shadow-md ${i === 1 ? "border-primary shadow-sm ring-1 ring-primary/20" : ""}`}
             >
-              <CardContent className="pt-6 flex flex-col h-full justify-between">
+              <CardContent className="p-5 lg:p-6 flex flex-col h-full justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-lg">{pkg.label}</h3>
-                    {i === 1 && <Badge variant="default">Terpopuler</Badge>}
+                    {i === 1 && <Badge variant="default" className="text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider">Terpopuler</Badge>}
                   </div>
-                  <p className="text-sm text-muted-foreground">{pkg.desc}</p>
+                  <p className="text-sm text-muted-foreground min-h-[40px]">{pkg.desc}</p>
                   
-                  <div className="mt-4 mb-6">
-                    <span className="text-3xl font-bold">
-                      Rp {pkg.price.toLocaleString()}
+                  <div className="mt-4 mb-6 flex items-baseline gap-1 whitespace-nowrap">
+                    <span className="text-lg font-semibold text-muted-foreground">Rp</span>
+                    <span className="text-3xl lg:text-4xl font-extrabold tracking-tight">
+                      {pkg.price.toLocaleString()}
                     </span>
                   </div>
                   
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Zap className="w-4 h-4 text-muted-foreground" />
-                      <span>{pkg.tokens.toLocaleString()} token</span>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2.5 text-sm">
+                      <div className="p-1.5 rounded-md bg-primary/10 text-primary">
+                        <Zap className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-medium">{pkg.tokens.toLocaleString()} token</span>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Coins className="w-4 h-4" />
+                    <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                      <div className="p-1.5 rounded-md bg-muted text-muted-foreground">
+                        <Coins className="w-3.5 h-3.5" />
+                      </div>
                       <span>{pkg.perToken}</span>
                     </div>
                   </div>
@@ -215,12 +220,12 @@ export default function BillingPage() {
                 
                 <Button
                   variant={i === 1 ? "default" : "outline"}
-                  className="w-full mt-6"
+                  className={`w-full mt-8 font-semibold ${i === 1 ? 'hover:bg-primary/90' : 'hover:bg-muted'}`}
                   onClick={() => handleBuy(pkg.key)}
                   disabled={buying === pkg.key}
                 >
                   {buying === pkg.key ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                  Beli Token
+                  Beli {pkg.label}
                 </Button>
               </CardContent>
             </Card>

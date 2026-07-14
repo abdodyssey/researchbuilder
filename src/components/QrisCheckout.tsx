@@ -143,15 +143,15 @@ export function QrisCheckout({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-bg-card border border-border-color rounded-xl shadow-xl animate-in fade-in zoom-in-95">
+      <div className="relative w-full max-w-sm bg-card border rounded-xl shadow-xl animate-in fade-in zoom-in-95">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-color">
-          <h3 className="text-sm font-extrabold text-text-primary">
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <h3 className="text-sm font-extrabold text-foreground">
             Pembayaran QRIS
           </h3>
           <button
             onClick={onClose}
-            className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-main transition-colors"
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -161,50 +161,52 @@ export function QrisCheckout({
         <div className="px-5 py-5 flex flex-col items-center">
           {/* Package info */}
           <div className="w-full flex items-center justify-between mb-4 text-xs">
-            <span className="text-text-secondary">
-              Paket <span className="font-semibold text-text-primary">{packageLabel}</span>
+            <span className="text-muted-foreground">
+              Paket <span className="font-semibold text-foreground">{packageLabel}</span>
             </span>
-            <span className="font-bold text-text-primary">
+            <span className="font-bold text-foreground">
               Rp {amount.toLocaleString()}
             </span>
           </div>
-          <div className="w-full text-[11px] text-text-muted mb-5 text-center">
+          <div className="w-full text-[11px] text-muted-foreground mb-5 text-center">
             {tokens.toLocaleString()} token akan ditambahkan ke saldo Anda.
           </div>
 
           {status === "pending" && qrUrl && (
             <>
               {/* QR Image */}
-              <div className="bg-white rounded-lg p-3 mb-4 flex flex-col items-center gap-2">
+              <div className="bg-white rounded-xl p-4 mb-5 shadow-sm border-2 border-muted/50 flex flex-col items-center justify-center">
                 <img
                   src={qrUrl}
                   alt="QRIS QR Code"
-                  className="w-52 h-52 object-contain"
+                  className="w-56 h-56 object-contain"
                 />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={downloadQrImage}
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Unduh QR Code
-                </Button>
               </div>
 
-              <p className="text-xs text-text-secondary text-center mb-3">
-                Scan QR code di atas dengan aplikasi bank atau e-wallet Anda.
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={downloadQrImage}
+                className="mb-5"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Simpan QR Code
+              </Button>
+
+              <p className="text-xs text-muted-foreground text-center mb-5 px-4 leading-relaxed">
+                Scan QR code di atas menggunakan aplikasi bank atau e-wallet pilihan Anda.
               </p>
 
               {/* Timer */}
-              <div className="flex items-center gap-2 text-xs text-text-muted mb-4">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+              <div className="flex items-center justify-center w-full gap-2 text-sm text-muted-foreground mb-6 bg-muted/30 py-3 rounded-lg border border-border/50">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
                 <span>Menunggu pembayaran...</span>
-                <span className="font-mono font-semibold text-text-secondary">
+                <span className="font-mono font-bold text-foreground ml-1 text-base">
                   {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
                 </span>
               </div>
 
-              <Button variant="outline" size="sm" onClick={() => setStatus("cancelled")} className="w-full">
+              <Button variant="ghost" size="sm" onClick={() => setStatus("cancelled")} className="w-full text-muted-foreground hover:text-destructive hover:bg-destructive/10">
                 Batalkan Pembayaran
               </Button>
             </>
@@ -213,15 +215,15 @@ export function QrisCheckout({
           {status === "pending" && !qrUrl && (
             <div className="py-8 flex flex-col items-center gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="text-xs text-text-muted">Memuat QR code...</p>
+              <p className="text-xs text-muted-foreground">Memuat QR code...</p>
             </div>
           )}
 
           {status === "paid" && (
             <div className="py-8 flex flex-col items-center gap-3 w-full">
-              <CheckCircle2 className="w-12 h-12 text-status-success" />
-              <p className="text-sm font-bold text-text-primary">Pembayaran Berhasil!</p>
-              <p className="text-xs text-text-muted text-center">
+              <CheckCircle2 className="w-12 h-12 text-green-500" />
+              <p className="text-sm font-bold text-foreground">Pembayaran Berhasil!</p>
+              <p className="text-xs text-muted-foreground text-center">
                 +{tokens.toLocaleString()} token ditambahkan ke saldo Anda.
               </p>
               <Button onClick={onComplete} className="w-full mt-4">
@@ -232,9 +234,9 @@ export function QrisCheckout({
 
           {status === "expired" && (
             <div className="py-8 flex flex-col items-center gap-3 w-full">
-              <AlertCircle className="w-12 h-12 text-status-error" />
-              <p className="text-sm font-bold text-text-primary">QR Kedaluwarsa</p>
-              <p className="text-xs text-text-muted text-center">
+              <AlertCircle className="w-12 h-12 text-destructive" />
+              <p className="text-sm font-bold text-foreground">QR Kedaluwarsa</p>
+              <p className="text-xs text-muted-foreground text-center">
                 Waktu pembayaran telah habis. Silakan coba lagi.
               </p>
               <Button variant="outline" size="sm" onClick={onClose} className="w-full mt-2">
@@ -245,9 +247,9 @@ export function QrisCheckout({
 
           {status === "cancelled" && (
             <div className="py-8 flex flex-col items-center gap-3 w-full">
-              <XCircle className="w-12 h-12 text-text-muted" />
-              <p className="text-sm font-bold text-text-primary">Pembayaran Dibatalkan</p>
-              <p className="text-xs text-text-muted text-center">
+              <XCircle className="w-12 h-12 text-muted-foreground" />
+              <p className="text-sm font-bold text-foreground">Pembayaran Dibatalkan</p>
+              <p className="text-xs text-muted-foreground text-center">
                 Transaksi QRIS ini tidak dilanjutkan. Token tidak ditambahkan.
               </p>
               <Button variant="outline" size="sm" onClick={onClose} className="w-full mt-2">

@@ -189,3 +189,18 @@ async def api_change_password(
     current_user.password_hash = hash_password(req.new_password)
     db.commit()
     return {"detail": "Kata sandi berhasil diperbarui"}
+
+@router.delete("/me")
+async def api_delete_account(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from models import ResearchJob, Payment
+    
+    # Lakukan penghapusan manual (cascade)
+    db.query(ResearchJob).filter(ResearchJob.user_id == current_user.id).delete()
+    db.query(Payment).filter(Payment.user_id == current_user.id).delete()
+    
+    db.delete(current_user)
+    db.commit()
+    return {"detail": "Akun berhasil dihapus secara permanen."}

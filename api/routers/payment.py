@@ -282,23 +282,12 @@ async def create_payment_link(
 
     mayar_api_key = os.getenv("MAYAR_API_KEY")
 
-    # ── Mock / Dev mode ───────────────────────────────────────────────────────
+    # ── Security Check ────────────────────────────────────────────────────────
     if not mayar_api_key:
-        payment.status = "paid"
-        current_user.tokens_purchased += tokens
-        db.commit()
-        print(
-            f"[PAYMENT] Mock mode — payment_id={payment.id} +{tokens} tokens",
-            flush=True,
+        raise HTTPException(
+            status_code=500, 
+            detail="Sistem pembayaran sedang tidak tersedia saat ini. Silakan hubungi admin."
         )
-        return {
-            "payment_id": payment.id,
-            "qr_url": None,
-            "amount": amount,
-            "package_label": label,
-            "tokens": tokens,
-            "mock": True,
-        }
 
     # ── Production mode ───────────────────────────────────────────────────────
     try:

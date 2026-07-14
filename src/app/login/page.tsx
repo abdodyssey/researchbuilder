@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const { login, register, resendVerification, token, loading, user } = useAuth();
@@ -16,12 +17,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
-  const [resendMsg, setResendMsg] = useState("");
   const [resending, setResending] = useState(false);
   const router = useRouter();
 
@@ -31,10 +30,9 @@ export default function LoginPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setErrorMsg("");
 
     if (activeTab === "register" && password !== confirmPassword) {
-      setErrorMsg("Kata sandi tidak cocok.");
+      toast.error("Error", { description: "Kata sandi tidak cocok." });
       return;
     }
 
@@ -48,7 +46,7 @@ export default function LoginPage() {
         setRegisteredEmail(res.email);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || "Terjadi kesalahan sistem. Silakan coba kembali.");
+      toast.error("Gagal", { description: err.message || "Terjadi kesalahan sistem. Silakan coba kembali." });
     } finally {
       setSubmitting(false);
     }
@@ -56,14 +54,12 @@ export default function LoginPage() {
 
   async function handleResend() {
     if (!registeredEmail) return;
-    setResendMsg("");
-    setErrorMsg("");
     setResending(true);
     try {
       const msg = await resendVerification(registeredEmail);
-      setResendMsg(msg);
+      toast.success("Berhasil", { description: msg });
     } catch (err: any) {
-      setErrorMsg(err.message || "Gagal mengirim ulang.");
+      toast.error("Gagal", { description: err.message || "Gagal mengirim ulang." });
     } finally {
       setResending(false);
     }
@@ -108,17 +104,6 @@ export default function LoginPage() {
                   Klik tautan di email untuk mengaktifkan akun. Jangan lupa cek folder spam.
                 </p>
 
-                {resendMsg && (
-                  <div className="mb-4 p-3 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs">
-                    {resendMsg}
-                  </div>
-                )}
-                {errorMsg && (
-                  <div className="mb-4 p-3 rounded-lg border border-destructive/30 bg-destructive/5 text-destructive text-xs">
-                    {errorMsg}
-                  </div>
-                )}
-
                 <Button
                   type="button"
                   variant="outline"
@@ -133,8 +118,6 @@ export default function LoginPage() {
                   onClick={() => {
                     setRegisteredEmail(null);
                     setActiveTab("login");
-                    setResendMsg("");
-                    setErrorMsg("");
                   }}
                   className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                 >
@@ -143,12 +126,11 @@ export default function LoginPage() {
               </div>
             ) : (
             <>
-            {/* Tabs */}
             <div className="flex border-b mb-6" role="tablist">
               {(["login", "register"] as const).map((tab) => (
                 <button
                   key={tab}
-                  onClick={() => { setActiveTab(tab); setErrorMsg(""); }}
+                  onClick={() => setActiveTab(tab)}
                   role="tab"
                   aria-selected={activeTab === tab}
                   className={cn(
@@ -162,13 +144,6 @@ export default function LoginPage() {
                 </button>
               ))}
             </div>
-
-            {/* Error */}
-            {errorMsg && (
-              <div className="mb-4 p-3 rounded-lg border border-destructive/30 bg-destructive/5 text-destructive text-xs" role="alert">
-                {errorMsg}
-              </div>
-            )}
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">

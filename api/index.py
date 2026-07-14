@@ -18,7 +18,7 @@ from routers.payment import router as payment_router
 from routers.research import router as research_router
 from routers.runs import router as runs_router
 
-load_dotenv()
+load_dotenv(dotenv_path="../.env", override=True)
 
 app = FastAPI(title="ResearchBuilder API")
 

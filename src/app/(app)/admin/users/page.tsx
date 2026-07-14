@@ -20,6 +20,17 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -48,7 +59,6 @@ export default function UserManagementPage() {
   const { user, authFetch } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   // Edit User State
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -59,6 +69,10 @@ export default function UserManagementPage() {
     tokens_purchased: 0,
   });
   const [isSaving, setIsSaving] = useState(false);
+
+  // Delete User State
+  const [deleteUserDialog, setDeleteUserDialog] = useState<{ id: string; email: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -71,10 +85,10 @@ export default function UserManagementPage() {
       if (res.ok) {
         setUsers(await res.json());
       } else {
-        setError("Gagal memuat data user");
+        toast.error("Gagal Memuat Data", { description: "Gagal memuat data user" });
       }
     } catch (err) {
-      setError("Server tidak dapat dijangkau");
+      toast.error("Error", { description: "Server tidak dapat dijangkau" });
     } finally {
       setLoading(false);
     }
@@ -93,7 +107,6 @@ export default function UserManagementPage() {
   const handleSaveEdit = async () => {
     if (!editingUser) return;
     setIsSaving(true);
-    setError("");
     try {
       const res = await authFetch(`/api/admin/users/${editingUser.id}`, {
         method: "PATCH",
@@ -105,33 +118,41 @@ export default function UserManagementPage() {
         const updatedUser = await res.json();
         setUsers(users.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
         setIsEditDialogOpen(false);
+        toast.success("User Diupdate", { description: "Data user berhasil diperbarui." });
       } else {
         const data = await res.json();
-        setError(data.detail || "Gagal mengupdate user");
+        toast.error("Gagal Update", { description: data.detail || "Gagal mengupdate user" });
       }
     } catch (err) {
-      setError("Terjadi kesalahan jaringan");
+      toast.error("Error", { description: "Terjadi kesalahan jaringan" });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDelete = async (userId: string, email: string) => {
-    if (!window.confirm(`Apakah Anda yakin ingin menghapus user ${email}? Tindakan ini tidak bisa dibatalkan.`)) {
-      return;
-    }
+  const handleDelete = (userId: string, email: string) => {
+    setDeleteUserDialog({ id: userId, email });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteUserDialog) return;
+    setIsDeleting(true);
     try {
-      const res = await authFetch(`/api/admin/users/${userId}`, {
+      const res = await authFetch(`/api/admin/users/${deleteUserDialog.id}`, {
         method: "DELETE",
       });
       if (res.ok) {
-        setUsers(users.filter((u) => u.id !== userId));
+        setUsers(users.filter((u) => u.id !== deleteUserDialog.id));
+        setDeleteUserDialog(null);
+        toast.success("User Dihapus", { description: "User berhasil dihapus." });
       } else {
         const data = await res.json();
-        alert(data.detail || "Gagal menghapus user");
+        toast.error("Gagal Hapus", { description: data.detail || "Gagal menghapus user" });
       }
     } catch (err) {
-      alert("Terjadi kesalahan");
+      toast.error("Error", { description: "Terjadi kesalahan jaringan saat menghapus" });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -144,25 +165,17 @@ export default function UserManagementPage() {
   }
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 md:p-8 max-w-7xl mx-auto w-full space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Manajemen User</h1>
-          <p className="text-muted-foreground mt-1">
-            Kelola akses, role, dan saldo token pengguna ResearchBuilder.
-          </p>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Manajemen User</h2>
+          <p className="text-sm text-muted-foreground mt-1">Kelola akses, role, dan saldo token pengguna ResearchBuilder.</p>
         </div>
         <Button variant="outline" onClick={fetchUsers} disabled={loading}>
           {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
           Refresh Data
         </Button>
       </div>
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
 
       <div className="rounded-md border bg-card overflow-x-auto">
         <Table>
@@ -317,6 +330,26 @@ export default function UserManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete User Alert Dialog */}
+      <AlertDialog open={!!deleteUserDialog} onOpenChange={(open) => !open && setDeleteUserDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Apakah Anda yakin ingin menghapus akun <strong>{deleteUserDialog?.email}</strong>?
+              Seluruh data dokumen riset dan riwayat transaksi mereka akan dihapus secara permanen. Tindakan ini tidak bisa dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Batal</AlertDialogCancel>
+            <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Ya, Hapus User
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

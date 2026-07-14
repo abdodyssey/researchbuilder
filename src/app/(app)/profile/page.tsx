@@ -21,7 +21,18 @@ import {
   Loader2,
   CheckCircle2,
   CalendarDays,
+  AlertTriangle,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 function formatTokens(n: number) {
   if (n >= 999999999) return "Unlimited";
@@ -42,21 +53,21 @@ function formatDate(iso?: string | null) {
 }
 
 export default function ProfilePage() {
-  const { user, authFetch, refreshProfile } = useAuth();
+  const { user, authFetch, refreshProfile, logout } = useAuth();
 
   // Profile (nama) form
   const [fullName, setFullName] = useState(user?.full_name ?? "");
   const [savingName, setSavingName] = useState(false);
-  const [nameMsg, setNameMsg] = useState<string | null>(null);
-  const [nameErr, setNameErr] = useState<string | null>(null);
 
   // Password form
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPw, setSavingPw] = useState(false);
-  const [pwMsg, setPwMsg] = useState<string | null>(null);
-  const [pwErr, setPwErr] = useState<string | null>(null);
+
+  // Delete account form
+  const [deleteAccountDialog, setDeleteAccountDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   if (!user) return null;
 
@@ -64,10 +75,7 @@ export default function ProfilePage() {
 
   async function handleSaveName(e: React.FormEvent) {
     e.preventDefault();
-    setNameMsg(null);
-    setNameErr(null);
     if (!fullName.trim()) {
-      setNameErr("Nama tidak boleh kosong.");
       return;
     }
     setSavingName(true);
@@ -77,16 +85,15 @@ export default function ProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ full_name: fullName.trim() }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(
-          typeof data.detail === "string" ? data.detail : "Gagal menyimpan nama."
-        );
+        toast.error("Gagal Update", { description: data.detail || "Terjadi kesalahan." });
+      } else {
+        await refreshProfile();
+        toast.success("Berhasil Update", { description: "Nama Anda berhasil diperbarui." });
       }
-      await refreshProfile();
-      setNameMsg("Nama berhasil diperbarui.");
     } catch (err) {
-      setNameErr(err instanceof Error ? err.message : "Gagal menyimpan nama.");
+      toast.error("Error", { description: "Gagal terhubung ke server." });
     } finally {
       setSavingName(false);
     }
@@ -94,14 +101,12 @@ export default function ProfilePage() {
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
-    setPwMsg(null);
-    setPwErr(null);
     if (newPassword.length < 8) {
-      setPwErr("Kata sandi baru minimal 8 karakter.");
+      toast.error("Error", { description: "Kata sandi baru minimal 8 karakter." });
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPwErr("Konfirmasi kata sandi tidak cocok.");
+      toast.error("Error", { description: "Konfirmasi kata sandi tidak cocok." });
       return;
     }
     setSavingPw(true);
@@ -114,32 +119,42 @@ export default function ProfilePage() {
           new_password: newPassword,
         }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(
-          typeof data.detail === "string"
-            ? data.detail
-            : "Gagal mengubah kata sandi."
-        );
+        toast.error("Gagal Update", { description: data.detail || "Gagal mengubah password" });
+      } else {
+        toast.success("Password Diperbarui", { description: "Password Anda berhasil diubah." });
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
       }
-      setPwMsg("Kata sandi berhasil diperbarui.");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
     } catch (err) {
-      setPwErr(
-        err instanceof Error ? err.message : "Gagal mengubah kata sandi."
-      );
+      toast.error("Error", { description: "Terjadi kesalahan jaringan" });
     } finally {
       setSavingPw(false);
     }
   }
 
+  async function handleDeleteAccount() {
+    setIsDeleting(true);
+    try {
+      const res = await authFetch("/api/auth/me", { method: "DELETE" });
+      if (!res.ok) {
+        throw new Error("Gagal menghapus akun.");
+      }
+      toast.success("Akun Dihapus", { description: "Akun Anda telah berhasil dihapus." });
+      logout();
+    } catch (err) {
+      toast.error("Gagal Hapus", { description: err instanceof Error ? err.message : "Terjadi kesalahan saat menghapus akun." });
+      setIsDeleting(false);
+    }
+  }
+
   return (
-    <div className="p-6 md:p-10 max-w-3xl mx-auto w-full space-y-8">
+    <div className="p-6 md:p-8 max-w-3xl mx-auto w-full space-y-8">
       {/* Header */}
       <div>
-        <h2 className="text-xl font-bold tracking-tight">Profil Saya</h2>
+        <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Profil Saya</h2>
         <p className="text-sm text-muted-foreground mt-1">
           Kelola informasi akun dan keamanan Anda.
         </p>
@@ -242,13 +257,6 @@ export default function ProfilePage() {
                 Email tidak dapat diubah karena digunakan untuk masuk.
               </p>
             </div>
-            {nameErr && <p className="text-sm text-destructive">{nameErr}</p>}
-            {nameMsg && (
-              <p className="text-sm text-green-600 flex items-center gap-1.5">
-                <CheckCircle2 className="size-4" />
-                {nameMsg}
-              </p>
-            )}
           </CardContent>
           <CardFooter className="border-t pt-6">
             <Button type="submit" disabled={savingName || !nameChanged}>
@@ -314,13 +322,6 @@ export default function ProfilePage() {
                 />
               </div>
             </div>
-            {pwErr && <p className="text-sm text-destructive">{pwErr}</p>}
-            {pwMsg && (
-              <p className="text-sm text-green-600 flex items-center gap-1.5">
-                <CheckCircle2 className="size-4" />
-                {pwMsg}
-              </p>
-            )}
           </CardContent>
           <CardFooter className="border-t pt-6">
             <Button
@@ -338,6 +339,57 @@ export default function ProfilePage() {
           </CardFooter>
         </form>
       </Card>
+
+      {/* Zona Berbahaya */}
+      <Card className="border-destructive/30 border-2">
+        <CardHeader>
+          <CardTitle className="text-base text-destructive flex items-center gap-2">
+            <AlertTriangle className="size-5" />
+            Zona Berbahaya
+          </CardTitle>
+          <CardDescription>
+            Tindakan di bawah ini bersifat permanen dan tidak dapat dibatalkan.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Menghapus akun akan memusnahkan seluruh data Anda dari sistem kami secara permanen, termasuk:
+          </p>
+          <ul className="text-sm text-muted-foreground list-disc list-inside mb-4 space-y-1">
+            <li>Riwayat dan draf semua artikel riset Anda</li>
+            <li>Sisa saldo {formatTokens(user.tokens_balance)} token</li>
+            <li>Riwayat pembayaran tagihan</li>
+          </ul>
+        </CardContent>
+        <CardFooter className="border-t border-destructive/20 bg-destructive/5 pt-6 rounded-b-lg">
+          <Button
+            variant="destructive"
+            onClick={() => setDeleteAccountDialog(true)}
+          >
+            Hapus Akun Saya Permanen
+          </Button>
+        </CardFooter>
+      </Card>
+
+      {/* Delete Account Dialog */}
+      <AlertDialog open={deleteAccountDialog} onOpenChange={setDeleteAccountDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apakah Anda benar-benar yakin?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tindakan ini <strong>TIDAK BISA DIBATALKAN</strong>. Hal ini akan menghapus seluruh data Anda dari 
+              server secara permanen, termasuk seluruh dokumen riset dan token yang tersisa.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Batal</AlertDialogCancel>
+            <Button variant="destructive" onClick={handleDeleteAccount} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
+              Ya, Hapus Akun Saya
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

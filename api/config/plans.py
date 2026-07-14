@@ -10,6 +10,7 @@ TOKEN_PACKAGES = {
     "starter":  {"tokens":  50_000, "price":  15_000, "label": "Starter"},   # Rp 300 / 1k token
     "standard": {"tokens": 200_000, "price":  50_000, "label": "Standard"},  # Rp 250 / 1k token  ← terpopuler
     "bulk":     {"tokens": 600_000, "price": 120_000, "label": "Bulk"},      # Rp 200 / 1k token  ← terbaik
+    "test_dev": {"tokens":   5_000, "price":   1_000, "label": "Test Dev"},  # Paket 1k untuk testing
 }
 
 FREE_TOKENS = 10000

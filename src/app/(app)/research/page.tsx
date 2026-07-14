@@ -447,11 +447,10 @@ export default function ResearchPage() {
   if (!user) return null;
 
   return (
-    <div className="p-6 md:p-10 max-w-4xl mx-auto w-full space-y-8">
-      {/* Header */}
+    <div className="p-6 md:p-8 max-w-4xl mx-auto w-full space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-extrabold  text-foreground tracking-tight">Buat Artikel Riset</h2>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Buat Artikel Riset</h2>
           <p className="text-xs text-muted-foreground mt-1">Wizard interaktif untuk menghasilkan artikel ilmiah dari topik hingga ekspor.</p>
         </div>
         {step > 1 && (
@@ -538,20 +537,26 @@ export default function ResearchPage() {
           {/* Submitting button container */}
 
           <div className="flex flex-col sm:flex-row items-center justify-end gap-4 pt-2">
-            {user.tokens_balance < 20000 && (
-              <div className="text-xs text-amber-600 bg-amber-500/10 px-3 py-2 rounded-md border border-amber-500/20 flex items-center gap-2 max-w-md">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>Estimasi minimum 1 artikel penuh adalah ~20.000 token. Saldo Anda ({user.tokens_balance.toLocaleString()}) tidak cukup.</span>
-              </div>
+            {user.tokens_balance < 20000 ? (
+              <>
+                <div className="text-xs text-amber-600 bg-amber-500/10 px-3 py-2 rounded-md border border-amber-500/20 flex items-center gap-2 max-w-md">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>Estimasi pembuatan 1 artikel butuh ~20.000 token. Saldo Anda ({user.tokens_balance.toLocaleString()}) tidak cukup.</span>
+                </div>
+                <Button size="lg" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => router.push("/billing")}>
+                  Beli Token
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="lg"
+                onClick={handleSubmitTopic}
+                disabled={!tema.trim()}
+              >
+                <Search className="w-4 h-4 mr-2" />
+                Cari Judul
+              </Button>
             )}
-            <Button
-              size="lg"
-              onClick={handleSubmitTopic}
-              disabled={!tema.trim() || user.tokens_balance < 20000}
-            >
-              <Search className="w-4 h-4 mr-2" />
-              Cari Judul
-            </Button>
           </div>
         </div>
       )}

@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Inter, Lora } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
+import { LanguageProvider } from "@/context/LanguageContext";
 import { ConnectionBanner } from "@/components/ui/ConnectionBanner";
+import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -31,8 +33,11 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-background text-foreground font-sans">
         <AuthProvider>
-          <ConnectionBanner />
-          {children}
+          <LanguageProvider>
+            <ConnectionBanner />
+            {children}
+            <Toaster position="top-right" />
+          </LanguageProvider>
         </AuthProvider>
       </body>
     </html>

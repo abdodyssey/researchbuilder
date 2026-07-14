@@ -84,9 +84,15 @@ async def admin_delete_user(
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+        
+    # Manual cascade delete to avoid IntegrityError on PostgreSQL
+    from models import ResearchJob, Payment
+    db.query(ResearchJob).filter(ResearchJob.user_id == user_id).delete(synchronize_session=False)
+    db.query(Payment).filter(Payment.user_id == user_id).delete(synchronize_session=False)
+    
     db.delete(target)
     db.commit()
-    return {"detail": "User dihapus"}
+    return {"detail": "User dan seluruh data terkait berhasil dihapus"}
 
 
 @router.get("/stats")

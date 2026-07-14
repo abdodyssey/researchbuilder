@@ -10,6 +10,7 @@ import {
   Zap,
   LayoutDashboard,
   Loader2,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -100,45 +101,9 @@ export default function DocumentsPage() {
       <div>
         <h2 className="text-xl font-bold tracking-tight">Dokumen Saya</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Kelola semua dokumen yang pernah dibuat dan pantau penggunaan token.
+          Kelola semua dokumen artikel akademis yang pernah Anda buat.
         </p>
       </div>
-
-      {/* Stat Cards */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i}>
-              <CardContent className="pt-6 space-y-3">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-8 w-20" />
-                <Skeleton className="h-3 w-32" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard
-            title="Total Dokumen"
-            value={(runs ?? []).length}
-            icon={<FileText className="w-5 h-5" />}
-            description={`${(runs ?? []).filter((r) => r.status === "completed").length} selesai`}
-          />
-          <StatCard
-            title="Token Digunakan"
-            value={formatTokens(user.tokens_used)}
-            icon={<Zap className="w-5 h-5" />}
-            description={`Saldo: ${formatTokens(user.tokens_balance)} token`}
-          />
-          <StatCard
-            title="Saldo Token"
-            value={formatTokens(user.tokens_balance)}
-            icon={<Zap className="w-5 h-5" />}
-            description={`Dari ${formatTokens(user.tokens_purchased)} total dibeli`}
-          />
-        </div>
-      )}
 
       {/* Documents List */}
       {loading ? (
@@ -172,13 +137,13 @@ export default function DocumentsPage() {
             <div className="w-16 h-16 rounded-xl border bg-muted flex items-center justify-center mb-6">
               <FileText className="w-8 h-8 text-muted-foreground" />
             </div>
-            <h3 className="text-base font-semibold mb-2">Belum ada dokumen</h3>
+            <h3 className="text-base font-semibold mb-2">Belum Ada Dokumen</h3>
             <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-              Mulai buat dokumen pertama Anda di Workspace untuk melihat daftar di sini.
+              Mulai buat draf artikel akademis pertamamu untuk melihat riwayatnya di sini.
             </p>
             <Button onClick={() => router.push("/research")}>
-              <LayoutDashboard className="w-4 h-4" />
-              Mulai Menulis
+              <Plus className="w-4 h-4 mr-2" />
+              Buat Artikel Baru
             </Button>
           </CardContent>
         </Card>
