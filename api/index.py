@@ -4,6 +4,7 @@ ResearchBuilder — API Entry Point
 
 import os
 import sys
+from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -18,7 +19,9 @@ from routers.payment import router as payment_router
 from routers.research import router as research_router
 from routers.runs import router as runs_router
 
-load_dotenv(dotenv_path="../.env", override=True)
+# Load .env dari parent directory — robust terhadap working directory berbeda
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path, override=True)
 
 app = FastAPI(title="ResearchBuilder API")
 
