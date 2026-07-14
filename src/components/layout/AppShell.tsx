@@ -15,6 +15,7 @@ import {
   PenLine,
   ChevronsUpDown,
   UserCircle,
+  LayoutDashboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -44,6 +45,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const NAV_ITEMS = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/research", label: "Buat Artikel", icon: PenLine },
   { href: "/documents", label: "Dokumen Saya", icon: FileText },
   { href: "/billing", label: "Token & Tagihan", icon: CreditCard },

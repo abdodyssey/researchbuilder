@@ -87,3 +87,30 @@ async def admin_delete_user(
     db.delete(target)
     db.commit()
     return {"detail": "User dihapus"}
+
+
+@router.get("/stats")
+async def admin_stats(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from sqlalchemy import func
+    from models import ResearchJob
+    import os
+    
+    total_users = db.query(func.count(User.id)).scalar()
+    total_tokens = db.query(func.sum(User.tokens_used)).scalar() or 0
+    total_docs = db.query(func.count(ResearchJob.id)).filter(ResearchJob.pipeline_data.isnot(None)).scalar()
+    
+    groq_key = os.getenv("GROQ_API_KEY")
+    ss_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
+    
+    return {
+        "total_users": total_users,
+        "total_tokens_used": total_tokens,
+        "total_documents": total_docs,
+        "apis": {
+            "groq": "Terkoneksi" if groq_key else "Tidak Terkoneksi",
+            "semantic_scholar": "Terkoneksi (Premium)" if ss_key else "Mode Publik (Rate-Limited)",
+        }
+    }
