@@ -189,8 +189,12 @@ def _track_research_tokens(research_id: str, pipeline_id: str, user_id: str):
 def _bg_generate_titles(
     research_id: str, tema: str, bahasa: str,
     document_type: str, structure_preset: str, uploaded_doc_context: str,
+    user_id: str,
 ):
     try:
+        from utils.llm_client import set_active_pipeline_id
+        set_active_pipeline_id(research_id)
+        
         from agents.topic_narrowing import generate_title_options
         try:
             result = generate_title_options(
@@ -207,6 +211,8 @@ def _bg_generate_titles(
             session.title_options = result.options
             session.status = "titles_ready"
             save_research_session(session)
+            
+        _track_research_tokens(research_id, research_id, user_id)
     except Exception as e:
         session = load_research_session(research_id)
         if session:
@@ -500,7 +506,7 @@ async def api_research_titles(
 
     background_tasks.add_task(
         _bg_generate_titles, research_id, req.tema, req.bahasa,
-        req.document_type, req.structure_preset, "",
+        req.document_type, req.structure_preset, "", current_user.id,
     )
     return {"research_id": research_id, "status": "generating_titles"}
 
