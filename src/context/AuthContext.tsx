@@ -22,8 +22,12 @@ interface AuthContextType {
   register: (
     email: string,
     password: string,
-    fullName: string
-  ) => Promise<{ detail: string; email: string; requires_verification: boolean }>;
+    fullName: string,
+  ) => Promise<{
+    detail: string;
+    email: string;
+    requires_verification: boolean;
+  }>;
   verifyEmail: (token: string) => Promise<void>;
   resendVerification: (email: string) => Promise<string>;
   logout: () => void;
@@ -48,7 +52,10 @@ function parseValidationError(errObj: any): string {
   if (type.includes("email") || msgLower.includes("email")) {
     return "Format alamat email tidak valid.";
   }
-  if (type.includes("too_short") || msgLower.includes("at least 8 characters")) {
+  if (
+    type.includes("too_short") ||
+    msgLower.includes("at least 8 characters")
+  ) {
     return "Kata sandi harus terdiri dari minimal 8 karakter.";
   }
   if (type === "missing" || msgLower.includes("required")) {
@@ -105,9 +112,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       response = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "true"
+          "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify({ email, password }),
       });
@@ -115,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(
         !navigator.onLine
           ? "Tidak ada koneksi internet. Periksa koneksi Anda dan coba lagi."
-          : "Server tidak dapat dijangkau. Silakan coba beberapa saat lagi."
+          : "Server tidak dapat dijangkau. Silakan coba beberapa saat lagi.",
       );
     }
 
@@ -142,9 +149,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       response = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "true"
+          "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify({ email, password, full_name: fullName }),
       });
@@ -152,7 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(
         !navigator.onLine
           ? "Tidak ada koneksi internet. Periksa koneksi Anda dan coba lagi."
-          : "Server tidak dapat dijangkau. Silakan coba beberapa saat lagi."
+          : "Server tidak dapat dijangkau. Silakan coba beberapa saat lagi.",
       );
     }
 
@@ -188,15 +195,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       response = await fetch(`${API_URL}/api/auth/verify`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
         body: JSON.stringify({ token: verifyToken }),
       });
     } catch {
-      throw new Error("Server tidak dapat dijangkau. Silakan coba beberapa saat lagi.");
+      throw new Error(
+        "Server tidak dapat dijangkau. Silakan coba beberapa saat lagi.",
+      );
     }
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      throw new Error(typeof data.detail === "string" ? data.detail : "Verifikasi gagal");
+      throw new Error(
+        typeof data.detail === "string" ? data.detail : "Verifikasi gagal",
+      );
     }
     const data = await response.json();
     localStorage.setItem("token", data.token);
@@ -209,15 +223,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       response = await fetch(`${API_URL}/api/auth/resend-verification`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
         body: JSON.stringify({ email }),
       });
     } catch {
-      throw new Error("Server tidak dapat dijangkau. Silakan coba beberapa saat lagi.");
+      throw new Error(
+        "Server tidak dapat dijangkau. Silakan coba beberapa saat lagi.",
+      );
     }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(typeof data.detail === "string" ? data.detail : "Gagal mengirim ulang");
+      throw new Error(
+        typeof data.detail === "string" ? data.detail : "Gagal mengirim ulang",
+      );
     }
     return data.detail as string;
   }
