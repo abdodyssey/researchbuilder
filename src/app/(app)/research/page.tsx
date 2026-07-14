@@ -537,13 +537,19 @@ export default function ResearchPage() {
 
           {/* Submitting button container */}
 
-          <div className="flex justify-end pt-2">
+          <div className="flex flex-col sm:flex-row items-center justify-end gap-4 pt-2">
+            {user.tokens_balance < 20000 && (
+              <div className="text-xs text-amber-600 bg-amber-500/10 px-3 py-2 rounded-md border border-amber-500/20 flex items-center gap-2 max-w-md">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>Estimasi minimum 1 artikel penuh adalah ~20.000 token. Saldo Anda ({user.tokens_balance.toLocaleString()}) tidak cukup.</span>
+              </div>
+            )}
             <Button
               size="lg"
               onClick={handleSubmitTopic}
-              disabled={!tema.trim()}
+              disabled={!tema.trim() || user.tokens_balance < 20000}
             >
-              <Search className="w-4 h-4" />
+              <Search className="w-4 h-4 mr-2" />
               Cari Judul
             </Button>
           </div>
