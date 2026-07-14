@@ -7,7 +7,7 @@ import os
 import sys
 from logging.config import fileConfig
 
-from dotenv import load_dotenv
+from config.settings import settings
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
@@ -15,16 +15,10 @@ from alembic import context
 # Ensure api/ is on sys.path so our modules resolve.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-# Load .env — try api/.env first, then fall back to project root .env
-_here = os.path.dirname(__file__)
-load_dotenv(os.path.join(_here, "..", ".env"))        # api/.env
-load_dotenv(os.path.join(_here, "..", "..", ".env"))  # root .env (VPS layout)
-
 config = context.config
 
-# Override sqlalchemy.url from env var (never hardcoded).
-# Normalize to psycopg3 driver (postgresql+psycopg://) — project uses psycopg not psycopg2.
-database_url = os.getenv("DATABASE_URL", "")
+# Override sqlalchemy.url from Pydantic settings.
+database_url = settings.DATABASE_URL
 if database_url:
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
