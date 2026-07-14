@@ -93,7 +93,13 @@ async def _call_mayar_create_qris(
             status_code=502, detail="Mayar QRIS response missing QR URL"
         )
 
-    return qr_url, data.get("id", "")
+    return qr_url, (
+        data.get("id")
+        or data.get("productId")
+        or data.get("qrId")
+        or data.get("qrcodeId")
+        or ""
+    )
 
 
 def _find_matching_payment(db: Session, data: dict) -> Payment | None:
@@ -133,7 +139,8 @@ def _find_matching_payment(db: Session, data: dict) -> Payment | None:
 
     # Lapisan 3: parse internal payment.id dari description
     # Format: "[{payment.id}] Token {label} ResearchBuilder"
-    description = data.get("description") or ""
+    # Mayar mengirim field ini sebagai 'description' ATAU 'productDescription'
+    description = data.get("description") or data.get("productDescription") or ""
     if description.startswith("["):
         try:
             internal_id = description.split("[")[1].split("]")[0].strip()
