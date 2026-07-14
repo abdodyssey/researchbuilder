@@ -152,20 +152,38 @@ def _fallback_review(focused_topic: str, sections: list[dict]):
 # ── Background Tasks ─────────────────────────────────────────────────────────
 
 
-def _track_research_tokens(pipeline_id: str, user_id: str):
+def _track_research_tokens(research_id: str, pipeline_id: str, user_id: str):
     try:
+        from sqlalchemy import update
+        from models import ResearchJob
         db = SessionLocal()
         try:
-            user = db.query(User).filter(User.id == user_id).first()
-            if user:
+            job = db.get(ResearchJob, research_id)
+            if job:
+                from utils.llm_client import get_usage
                 usage = get_usage(pipeline_id)
                 total_tokens = usage.get("total", {}).get("total_tokens", 0)
-                user.tokens_used += total_tokens
-                db.commit()
+                
+                session_data = job.session_data or {}
+                charged_dict = session_data.get("tokens_charged_per_pipeline", {})
+                
+                previously_charged = charged_dict.get(pipeline_id, 0)
+                to_charge = total_tokens - previously_charged
+                
+                if to_charge > 0:
+                    # Atomic update to prevent race conditions when multiple tasks finish
+                    db.execute(
+                        update(User).where(User.id == user_id).values(tokens_used=User.tokens_used + to_charge)
+                    )
+                    
+                    charged_dict[pipeline_id] = total_tokens
+                    session_data["tokens_charged_per_pipeline"] = charged_dict
+                    job.session_data = session_data
+                    db.commit()
         finally:
             db.close()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Error tracking tokens: {e}")
 
 
 def _bg_generate_titles(
@@ -300,7 +318,7 @@ def _bg_run_literature_to_outline(
             session.step = 3
             save_research_session(session)
 
-        _track_research_tokens(pipeline_id, user_id)
+        _track_research_tokens(research_id, pipeline_id, user_id)
 
     except Exception as e:
         print(f"Error in research pipeline (lit→outline): {e}")
@@ -441,7 +459,7 @@ def _bg_run_writing_to_review(research_id: str, pipeline_id: str, user_id: str):
             session.step = 5
             save_research_session(session)
 
-        _track_research_tokens(pipeline_id, user_id)
+        _track_research_tokens(research_id, pipeline_id, user_id)
 
     except Exception as e:
         print(f"Error in research pipeline (writing→review): {e}")
