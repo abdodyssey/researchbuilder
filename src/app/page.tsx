@@ -55,59 +55,53 @@ export default function LandingPage() {
 
   const agentSteps = [
     {
-      name: "1. Validasi & Fokus Topik",
-      title: "Perumusan Fokus Riset",
+      name: "1. Tentukan Topik & Referensi",
+      title: "Eksplorasi Topik Awal",
       icon: Search,
-      desc: "Menganalisis ide riset mentah Anda dan merumuskan fokus topik spesifik, pertanyaan penelitian (Research Questions), serta judul akademis terbaik secara sistematis."
+      desc: "Masukkan topik riset Anda beserta dokumen PDF/DOCX referensi. Sistem akan langsung mengekstraksi dan menyintesis fokus penelitian terbaik."
     },
     {
-      name: "2. Pencarian Referensi",
-      title: "Pencarian Literatur & Referensi",
+      name: "2. Pilih Judul Akademis",
+      title: "Penentuan Judul Spesifik",
       icon: BookOpen,
-      desc: "Melakukan pencarian artikel akademis dan literatur jurnal pendukung yang relevan secara komprehensif menggunakan API pencarian akademis tingkat lanjut."
+      desc: "Sistem akan menghasilkan berbagai opsi judul artikel ilmiah yang relevan dan memiliki novelty. Anda bebas memilih yang paling pas."
     },
     {
-      name: "3. Analisis Novelty",
-      title: "Sintesis Materi & Research Gap",
-      icon: Merge,
-      desc: "Menganalisis hubungan antar referensi, mengekstrak tema-tema besar, serta merumuskan celah riset (research gap) yang kuat untuk memposisikan tulisan Anda."
-    },
-    {
-      name: "4. Pemetaan Outline",
+      name: "3. Pemetaan Outline",
       title: "Penyusunan Struktur Artikel",
       icon: FileText,
-      desc: "Menyusun struktur draf dokumen bab demi bab secara detail dengan alur akademis yang logis dan konsisten sesuai kaidah ilmiah."
+      desc: "Sistem menyusun struktur bab yang rapi, mulai dari Pendahuluan, Tinjauan Pustaka, Metode, hingga Kesimpulan sesuai kaidah jurnal."
     },
     {
-      name: "5. Penulisan Draf",
-      title: "Penulisan Draf Akademis",
+      name: "4. Penulisan Draf",
+      title: "Penulisan Draf Akademis Otomatis",
       icon: PenTool,
-      desc: "Menulis draf tulisan akademis lengkap berdasarkan referensi yang ditemukan dan outline terstruktur menggunakan gaya bahasa ilmiah formal."
+      desc: "Model AI canggih akan menulis isi draf secara bertahap berdasarkan outline dan referensi Anda. Proses ini akan menggunakan token sesuai panjang teks."
     },
     {
-      name: "6. Review & Skor Kelayakan",
-      title: "Tinjau Kualitas & Evaluasi Mandiri",
+      name: "5. Hasil & Review Mandiri",
+      title: "Evaluasi Akhir & Ekspor",
       icon: CheckSquare,
-      desc: "Mengevaluasi draf tulisan secara objektif, mendeteksi kesalahan, memberikan skor kelayakan jurnal, serta menyarankan poin perbaikan terperinci."
+      desc: "Sistem akan membaca ulang hasil akhir, memberikan skor kualitas artikel, saran revisi, dan naskah siap diekspor ke format dokumen (.docx)."
     }
   ];
 
   const faqs = [
     {
       q: "Bagaimana cara sistem membantu menulis draf naskah saya?",
-      a: "Sistem memproses naskah secara sekuensial dari pencarian literatur riil, perumusan outline terstruktur, penulisan bab lengkap, hingga peer-review mandiri dan penilaian skor kelayakan publikasi."
+      a: "Sistem memproses naskah secara sekuensial dari penentuan topik, pemilihan judul, penyusunan outline terstruktur, penulisan bab demi bab, hingga peer-review mandiri dan penilaian skor kelayakan publikasi."
     },
     {
       q: "Apakah data penelitian dan draf saya aman dari kebocoran?",
-      a: "Ya. ResearchBuilder menerapkan isolasi data multi-user yang sangat ketat di tingkat basis data dan sistem penyimpanan. Pengguna lain sama sekali tidak dapat mengakses, melihat, atau mengunduh draf atau riwayat riset Anda."
+      a: "Ya. ResearchBuilder menerapkan isolasi data multi-user yang sangat ketat di tingkat basis data. Pengguna lain sama sekali tidak dapat mengakses, melihat, atau mengunduh draf atau riwayat riset Anda."
     },
     {
-      q: "Apakah saya bisa mengunggah templat dokumen saya sendiri?",
-      a: "Bisa. Semua pengguna dapat mengunggah file .docx kosong sebagai templat agar hasil ekspor artikel mengikuti struktur format instansi Anda."
+      q: "Bolehkah saya menggunakan dokumen referensi mandiri?",
+      a: "Bisa. Anda dapat mengunggah file referensi utama dalam bentuk PDF atau DOCX pada tahap pertama. Model AI akan membaca dan mengekstrak informasi relevan dari dokumen Anda tersebut."
     },
     {
       q: "Bagaimana sistem penggunaan token dihitung?",
-      a: "Pemakaian token dihitung secara proporsional sesuai jumlah panjang dokumen (referensi, draf, dan revisi) yang diproses dan dihasilkan oleh model AI pada setiap langkah riset Anda. Anda bisa membeli token sesuai kebutuhan. Token tidak hangus dan bisa digunakan kapan saja."
+      a: "Pemakaian token dihitung secara proporsional sesuai jumlah panjang dokumen, referensi, dan teks yang diproses maupun dihasilkan oleh model AI. Anda bisa top-up token kapan saja melalui menu Token & Tagihan. Token tidak hangus (no expiry)."
     }
   ];
 
@@ -265,11 +259,11 @@ export default function LandingPage() {
           <Card>
             <CardHeader>
               <Merge className="w-6 h-6 text-primary mb-2" />
-              <CardTitle className="text-lg">Dua Metode Penulisan</CardTitle>
+              <CardTitle className="text-lg">Dukungan Referensi Mandiri</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Pilih antara menyusun draf baru dari nol secara otomatis atau mengunggah draf naskah mandiri Anda untuk dianalisis dan diformat.
+                Unggah dokumen referensi utama Anda (PDF/DOCX) dan biarkan sistem membaca serta mensintesis isinya menjadi dasar penelitian yang kuat.
               </p>
             </CardContent>
           </Card>
