@@ -1,36 +1,13 @@
-"""
-Payment Router — Lifecycle Transaksi QRIS Mayar
-================================================
-Modul ini menangani seluruh alur pembayaran token dari pembuatan QRIS
-hingga kreditkan saldo ke akun pengguna.
-
-Endpoints:
-    POST /api/payment/create         → Buat transaksi QRIS baru
-    GET  /api/payment/{id}/status    → Polling status transaksi
-    GET  /api/payment-stream/{id}    → SSE push notifikasi real-time
-    POST /api/webhook/mayar          → Callback dari Mayar saat bayar sukses/gagal
-    GET  /api/payments/history       → Riwayat pembelian token user
-
-Arsitektur Notifikasi (Hybrid SSE + Polling):
-    Klien membuka SSE stream → menunggu push dari webhook Mayar.
-    Klien juga polling /status setiap 3 detik sebagai safety net.
-    Webhook → update DB atomik → push ke SSE queue.
-
-Keterbatasan Skala (diketahui, acceptable untuk MVP):
-    `active_connections` disimpan in-memory → hanya bekerja di 1 worker process.
-    Jika scale ke multi-worker (gunicorn -w N), ganti dengan Redis pub/sub.
-"""
 
 import asyncio
 import json
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 import httpx
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel as PydanticBase
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -82,25 +59,7 @@ async def _call_mayar_create_qris(
     api_key: str,
     user_id: str,
 ) -> tuple[str, str]:
-    """
-    Panggil Mayar API untuk membuat QRIS dan kembalikan (qr_url, mayar_product_id).
-    Menyisipkan user_id ke dalam customer object / metadata agar tersimpan.
-
-    Menyematkan internal `payment_id` ke field 'description' agar webhook
-    dapat dicocokkan secara deterministik tanpa perlu fallback berbasis amount.
-
-    Args:
-        payment_id: UUID internal Payment record (disematkan ke description).
-        amount:     Harga dalam rupiah.
-        label:      Nama paket (untuk description yang terbaca manusia).
-        api_key:    MAYAR_API_KEY dari environment.
-
-    Returns:
-        (qr_url, mayar_product_id) — mayar_product_id bisa string kosong.
-
-    Raises:
-        HTTPException 502 jika Mayar tidak responsif atau respons tidak valid.
-    """
+   
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -138,24 +97,7 @@ async def _call_mayar_create_qris(
 
 
 def _find_matching_payment(db: Session, data: dict) -> Payment | None:
-    """
-    Temukan Payment record yang cocok dengan data webhook Mayar.
 
-    Strategi matching (3 lapisan, urutan prioritas):
-        1. productId   → mayar_payment_id yang disimpan saat QRIS dibuat (paling akurat)
-        2. transactionId / referenceId → mayar_payment_id Mayar
-        3. description → payment.id internal yang disisipkan saat buat QRIS
-
-    Fallback berbasis amount TIDAK digunakan karena berisiko salah kredit
-    jika dua pengguna membeli paket berharga sama secara bersamaan.
-
-    Args:
-        db:   SQLAlchemy session aktif.
-        data: Field 'data' dari payload JSON webhook Mayar.
-
-    Returns:
-        Payment record jika cocok ditemukan, None jika tidak ada.
-    """
     # Lapisan 1: productId — ID produk QRIS yang disimpan saat checkout dibuat
     product_id = data.get("productId")
     if product_id:
@@ -245,20 +187,6 @@ async def create_payment_link(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Buat transaksi QRIS baru untuk pembelian token.
-
-    Flow produksi:
-        1. Validasi key paket → ambil harga & jumlah token
-        2. INSERT Payment record dengan status 'pending'
-        3. Panggil Mayar API → dapatkan QR URL
-        4. Simpan mayar_product_id untuk matching webhook
-        5. Return payment_id + qr_url ke frontend
-
-    Flow dev (MAYAR_API_KEY tidak di-set):
-        Langsung set status 'paid' dan kredit token — tidak butuh gateway asli.
-        Frontend mendeteksi mock=True dan skip polling SSE.
-    """
     pkg = get_package(req.package)
     if not pkg:
         raise HTTPException(status_code=400, detail="Paket tidak valid")
@@ -266,6 +194,16 @@ async def create_payment_link(
     amount = pkg["price"]
     tokens = pkg["tokens"]
     label = pkg["label"]
+
+    # ── Cek API Key SEBELUM membuat record DB ─────────────────────────────────
+    # Penting: jika dicek sesudah INSERT, kegagalan di sini meninggalkan
+    # Payment record orphan (status=pending, tidak pernah expire).
+    mayar_api_key = os.getenv("MAYAR_API_KEY")
+    if not mayar_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Sistem pembayaran sedang tidak tersedia saat ini. Silakan hubungi admin.",
+        )
 
     payment = Payment(
         user_id=current_user.id,
@@ -278,16 +216,7 @@ async def create_payment_link(
     db.commit()
     db.refresh(payment)
 
-    mayar_api_key = os.getenv("MAYAR_API_KEY")
-
-    # ── Security Check ────────────────────────────────────────────────────────
-    if not mayar_api_key:
-        raise HTTPException(
-            status_code=500, 
-            detail="Sistem pembayaran sedang tidak tersedia saat ini. Silakan hubungi admin."
-        )
-
-    # ── Production mode ───────────────────────────────────────────────────────
+    # ── Panggil Mayar QRIS API ────────────────────────────────────────────────
     try:
         qr_url, mayar_product_id = await _call_mayar_create_qris(
             payment_id=payment.id,
@@ -313,8 +242,13 @@ async def create_payment_link(
             "tokens": tokens,
         }
     except HTTPException:
+        # Tandai payment sebagai cancelled agar tidak menumpuk sebagai "pending"
+        payment.status = "cancelled"
+        db.commit()
         raise
     except Exception as e:
+        payment.status = "cancelled"
+        db.commit()
         raise HTTPException(status_code=500, detail=f"Error membuat QRIS: {str(e)}")
 
 
@@ -324,15 +258,6 @@ async def payment_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Cek status transaksi — digunakan sebagai polling fallback di frontend.
-
-    Auto-expire: payment yang masih 'pending' setelah 16 menit diubah ke
-    'expired' (1 menit buffer di atas timer frontend 15 menit).
-
-    Returns:
-        { status: "pending"|"paid"|"expired", tokens_added: int }
-    """
     payment = (
         db.query(Payment)
         .filter(
@@ -366,16 +291,6 @@ async def payment_stream(
     token: str,
     db: Session = Depends(get_db),
 ):
-    """
-    SSE endpoint — client menunggu push real-time dari webhook Mayar.
-
-    Autentikasi via query param karena browser EventSource tidak mendukung
-    custom Authorization header. Token JWT tersimpan di URL (diketahui,
-    acceptable untuk MVP — lihat catatan di modul header).
-
-    Timeout: 16 menit. Setelah itu, SSE mengirim event 'expired' dan koneksi ditutup.
-    Jika koneksi terputus sebelum webhook masuk, polling /status sebagai fallback.
-    """
     user_id = decode_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Token tidak valid")
@@ -415,18 +330,7 @@ async def payment_stream(
 
 @router.post("/webhook/mayar")
 async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
-    """
-    Callback dari Mayar — dipanggil otomatis saat pembayaran sukses atau gagal.
 
-    Flow:
-        1. (Opsional) Verifikasi HMAC-SHA256 signature dari header x-mayar-signature
-        2. Cari Payment cocok via _find_matching_payment() — 3 lapisan matching
-        3. Atomic SQL update: pending→paid + kredit token ke user
-        4. Push notifikasi ke SSE queue jika client masih terhubung
-
-    Idempotency: webhook retry dari Mayar aman — atomic WHERE status='pending'
-    memastikan hanya 1 request yang berhasil update, sisanya rowcount=0.
-    """
     body = await request.body()
 
     try:
@@ -482,9 +386,12 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
         print(f"[WEBHOOK] Ignoring unhandled event={event!r}", flush=True)
         return {"status": "ok", "message": f"Event {event!r} not handled"}
 
-    # ── Idempotency ───────────────────────────────────────────────────────────
-    if payment.status == "paid":
-        print(f"[WEBHOOK] {payment.id} already PAID — skipped (idempotent)", flush=True)
+    # ── Idempotency — cek untuk semua status final ────────────────────────────
+    if payment.status in ("paid", "cancelled", "expired"):
+        print(
+            f"[WEBHOOK] {payment.id} already {payment.status.upper()} — skipped (idempotent)",
+            flush=True,
+        )
         return {"status": "ok", "message": "Already processed"}
 
     # ── Atomic DB Update ──────────────────────────────────────────────────────
@@ -517,6 +424,24 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
             flush=True,
         )
 
+    elif sse_status == "cancel":
+        # Penting: update DB ke "cancelled" agar polling fallback bisa mendeteksi
+        # pembatalan tanpa menunggu timer 15 menit di frontend.
+        rows = db.execute(
+            update(Payment)
+            .where(Payment.id == payment.id, Payment.status == "pending")
+            .values(status="cancelled")
+        ).rowcount
+        if rows == 0:
+            print(f"[WEBHOOK] Race condition (cancel) on {payment.id} — skipped", flush=True)
+            return {"status": "ok", "message": "Already processed"}
+        db.commit()
+        db.refresh(payment)
+        print(
+            f"[WEBHOOK] ❌ {payment.id} CANCELLED by gateway (event={event!r})",
+            flush=True,
+        )
+
     # ── Push ke SSE (jika client masih terhubung) ─────────────────────────────
     queue = active_connections.get(payment.id)
     if queue:
@@ -525,10 +450,9 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
     else:
         print(f"[WEBHOOK] No SSE for {payment.id} — polling will detect it", flush=True)
 
-    return {
-        "status": "success",
-        "message": f"Berhasil memproses {payment.tokens_added} token",
-    }
+    if sse_status == "success":
+        return {"status": "success", "message": f"Berhasil menambahkan {payment.tokens_added} token"}
+    return {"status": "success", "message": "Pembayaran dibatalkan oleh gateway"}
 
 
 @router.get("/payments/history")

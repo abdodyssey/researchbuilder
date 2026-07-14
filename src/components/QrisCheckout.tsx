@@ -12,7 +12,6 @@ interface QrisCheckoutProps {
   amount: number;
   packageLabel: string;
   tokens: number;
-  mock?: boolean;
   onComplete: () => void;
   onClose: () => void;
 }
@@ -25,12 +24,11 @@ export function QrisCheckout({
   amount,
   packageLabel,
   tokens,
-  mock,
   onComplete,
   onClose,
 }: QrisCheckoutProps) {
   const { authFetch, token } = useAuth();
-  const [status, setStatus] = useState<Status>(mock ? "paid" : "pending");
+  const [status, setStatus] = useState<Status>("pending");
   const [secondsLeft, setSecondsLeft] = useState(15 * 60);
 
   useEffect(() => {
@@ -44,7 +42,7 @@ export function QrisCheckout({
   // SSE lewat ngrok sering putus (timeout koneksi), sehingga polling sebagai
   // safety net agar status pembayaran tetap terdeteksi walau SSE gagal.
   useEffect(() => {
-    if (status !== "pending" || mock) return;
+    if (status !== "pending") return;
 
     let settled = false;
 
@@ -63,8 +61,9 @@ export function QrisCheckout({
     eventSource.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        if (data.status === "success") resolve("paid");
-        else if (data.status === "cancel" || data.status === "expired") resolve("expired");
+        if (data.status === "success")   resolve("paid");
+        else if (data.status === "cancel")   resolve("cancelled");
+        else if (data.status === "expired")  resolve("expired");
       } catch { /* ignore */ }
       eventSource.close();
     };
@@ -72,13 +71,16 @@ export function QrisCheckout({
     eventSource.onerror = () => eventSource.close();
 
     // ── 2. Polling setiap 3 detik sebagai fallback ──
+    // Polling menangkap status final (paid / cancelled / expired) dari DB,
+    // sehingga SSE yang gagal/putus tidak menyebabkan modal stuck pending.
     const interval = setInterval(async () => {
       try {
         const res = await authFetch(`/api/payment/${paymentId}/status`);
         if (res.ok) {
           const data = await res.json();
-          if (data.status === "paid") resolve("paid");
-          else if (data.status === "expired") resolve("expired");
+          if (data.status === "paid")      resolve("paid");
+          else if (data.status === "expired")   resolve("expired");
+          else if (data.status === "cancelled") resolve("cancelled");
         }
       } catch { /* ignore */ }
     }, 3000);
@@ -87,7 +89,7 @@ export function QrisCheckout({
       eventSource.close();
       clearInterval(interval);
     };
-  }, [status, paymentId, mock, token]);
+  }, [status, paymentId, token]);
 
   useEffect(() => {
     if (status !== "pending") return;

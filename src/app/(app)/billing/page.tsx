@@ -63,7 +63,7 @@ export default function BillingPage() {
   const [buying, setBuying] = useState<string | null>(null);
   const [buyError, setBuyError] = useState<string | null>(null);
   const [qrisData, setQrisData] = useState<{
-    paymentId: string; qrUrl: string | null; amount: number; packageLabel: string; tokens: number; mock?: boolean;
+    paymentId: string; qrUrl: string | null; amount: number; packageLabel: string; tokens: number;
   } | null>(null);
 
   const { data: invoices, loading: invoicesLoading, refetch: refetchInvoices } = useApiQuery<Invoice[]>("/api/payments/history");
@@ -84,7 +84,7 @@ export default function BillingPage() {
       });
       if (resp.ok) {
         const data = await resp.json();
-        setQrisData({ paymentId: data.payment_id, qrUrl: data.qr_url, amount: data.amount, packageLabel: data.package_label, tokens: data.tokens, mock: data.mock });
+        setQrisData({ paymentId: data.payment_id, qrUrl: data.qr_url, amount: data.amount, packageLabel: data.package_label, tokens: data.tokens });
       } else {
         let errMsg = "Gagal membuat transaksi. Coba lagi beberapa saat.";
         try { const errData = await resp.json(); if (errData.detail) errMsg = errData.detail; } catch { }
@@ -371,7 +371,6 @@ export default function BillingPage() {
           amount={qrisData.amount}
           packageLabel={qrisData.packageLabel}
           tokens={qrisData.tokens}
-          mock={qrisData.mock}
           onComplete={handlePaymentComplete}
           onClose={() => setQrisData(null)}
         />
