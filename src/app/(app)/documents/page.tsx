@@ -31,7 +31,7 @@ interface DocumentRun {
   research_id: string;
   pipeline_id: string;
   created_at: string;
-  status: "running" | "completed" | "failed";
+  status: "running" | "completed" | "failed" | "draft";
   tema_umum: string;
   bahasa: string;
   review_score: number | null;
@@ -42,12 +42,14 @@ interface DocumentRun {
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   completed: "default",
   running: "secondary",
+  draft: "outline",
   failed: "destructive",
 };
 
 const STATUS_LABEL: Record<string, string> = {
   completed: "Selesai",
   running: "Proses",
+  draft: "Draf",
   failed: "Gagal",
 };
 
