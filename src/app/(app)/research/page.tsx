@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { useRouter } from "next/navigation";
 import {
   PenLine,
@@ -35,8 +36,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const STEPS = ["Topik", "Pilih Judul", "Outline", "Penulisan", "Hasil"];
-
 
 
 interface TitleOption {
@@ -59,7 +58,16 @@ interface OutlineSection {
 
 export default function ResearchPage() {
   const { user, authFetch } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
+  
+  const STEPS = [
+    t("research.step_topic"),
+    t("research.step_title"),
+    t("research.step_outline"),
+    t("research.step_writing"),
+    t("research.step_result")
+  ];
 
   // Wizard state
   const [step, setStep] = useState(1);
@@ -134,6 +142,19 @@ export default function ResearchPage() {
       if (pollRef.current) clearTimeout(pollRef.current);
     };
   }, []);
+
+  // Mencegah user tidak sengaja menutup tab/reload saat sedang proses
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if ((step > 1 && step < 5) || polling || generatingTitles) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [step, polling, generatingTitles]);
 
   const getBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -361,6 +382,61 @@ export default function ResearchPage() {
     };
     poll();
   }, [authFetch]);
+  // ── Resume Session Logic ──
+  const resumeResearch = useCallback(async (id: string) => {
+    try {
+      const res = await authFetch(`/api/research/${id}/status`);
+      if (!res.ok) {
+        setError("Gagal memulihkan sesi.");
+        return;
+      }
+      const data = await res.json();
+      
+      setTema(data.tema || "");
+      setBahasa(data.bahasa || "id");
+      if (data.pipeline_id) setPipelineId(data.pipeline_id);
+
+      const s = data.step || 1;
+      setStep(s);
+
+      if (s === 1 || data.status === "generating_titles") {
+        setGeneratingTitles(true);
+        pollForTitles(id);
+      } else if (s === 2) {
+        if (data.title_options) setTitleOptions(data.title_options);
+      } else if (s === 3) {
+        if (data.outline) setOutline(data.outline);
+        else if (data.status !== "outline_ready") {
+          setPolling(true);
+          pollForOutline(id);
+        }
+      } else if (s === 4) {
+        if (data.writing_progress) setWritingProgress(data.writing_progress);
+        setPolling(true);
+        pollForWriting(id);
+      } else if (s === 5 || data.status === "completed") {
+        if (data.review) setReview(data.review);
+        setStep(5);
+      }
+      
+      if (data.status === "failed") {
+        setError(data.error || "Proses terhenti. Silakan hapus dokumen di Dashboard dan ulangi.");
+      }
+    } catch (e: any) {
+      setError("Gagal memulihkan riset.");
+    }
+  }, [authFetch, pollForTitles, pollForOutline, pollForWriting]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !authFetch) return;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    if (id && !researchId) {
+      setResearchId(id);
+      resumeResearch(id);
+      window.history.replaceState({}, '', '/research');
+    }
+  }, [researchId, authFetch, resumeResearch]);
 
   // Reset
   const handleReset = () => {
@@ -505,21 +581,21 @@ export default function ResearchPage() {
             <div className="flex items-center gap-3 mb-6">
               <div className="w-8 h-8 rounded-lg bg-primary/10 border border-border flex items-center justify-center text-primary font-bold ">1</div>
               <div>
-                <h3 className="text-base font-extrabold  text-foreground tracking-tight">Masukkan Topik Penelitian</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Deskripsikan tema penelitian yang ingin Anda tulis.</p>
+                <h3 className="text-base font-extrabold  text-foreground tracking-tight">{t("research.topic_title")}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">{t("research.topic_desc")}</p>
               </div>
             </div>
 
             <textarea
               className="w-full h-32 bg-background border border-border rounded-lg p-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-border focus:ring-1 focus:ring-primary/50 resize-none transition-colors"
-              placeholder="Contoh: Pengaruh kecerdasan buatan terhadap efisiensi pelayanan kesehatan di Indonesia..."
+              placeholder={t("research.topic_placeholder")}
               value={tema}
               onChange={(e) => setTema(e.target.value)}
             />
             <div className="mt-2 flex justify-between items-center">
               <div className="flex gap-4">
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-muted-foreground font-medium">Bahasa:</label>
+                  <label className="text-xs text-muted-foreground font-medium">{t("research.target_lang")}:</label>
                   <select
                     className="text-xs bg-background border border-border rounded-md px-2 py-1 outline-none focus:border-primary/50"
                     value={bahasa}
@@ -554,7 +630,7 @@ export default function ResearchPage() {
                 disabled={!tema.trim()}
               >
                 <Search className="w-4 h-4 mr-2" />
-                Cari Judul
+                {t("research.btn_search_title")}
               </Button>
             )}
           </div>
@@ -563,20 +639,40 @@ export default function ResearchPage() {
 
       {/* Loading: generating titles */}
       {step === 1 && generatingTitles && (
-        <Card className="p-12 flex flex-col items-center justify-center text-center min-h-[300px] animate-in fade-in duration-300">
-          <div className="w-16 h-16 bg-background border border-border rounded-xl flex items-center justify-center mb-6">
-            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <div className="space-y-4 animate-in fade-in duration-300">
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 text-primary mb-4 ring-4 ring-primary/5 animate-pulse">
+              <Search className="w-5 h-5 animate-spin" style={{ animationDuration: '3s' }} />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground tracking-tight">Menganalisis Literatur...</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+              Sistem sedang memetakan celah penelitian dan menyusun 3 opsi judul akademis terbaik untuk Anda.
+            </p>
           </div>
-          <h3 className="text-lg font-extrabold  text-foreground tracking-tight mb-2">Menganalisis Topik</h3>
-          <p className="text-xs text-muted-foreground max-w-sm">Mencari literatur di Semantic Scholar & merumuskan 3 judul berbasis research gap...</p>
-        </Card>
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="p-5 border-border/50 bg-background/50 backdrop-blur-sm">
+              <div className="flex items-start gap-4">
+                <div className="flex-1 space-y-3">
+                  <Skeleton className="h-5 w-24" />
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-5/6" />
+                  <div className="flex gap-2 pt-2">
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
 
       {/* ──────── Step 2: Pick Title ──────── */}
       {step === 2 && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="text-center mb-6">
-            <h3 className="text-lg font-extrabold  text-foreground tracking-tight">Pilih Judul Penelitian</h3>
+            <h3 className="text-lg font-semibold text-foreground tracking-tight">Pilih Judul Penelitian</h3>
             <p className="text-xs text-muted-foreground mt-1">AI menemukan 3 sudut pandang berbeda. Pilih yang paling sesuai.</p>
           </div>
 
@@ -625,20 +721,40 @@ export default function ResearchPage() {
       {step === 3 && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {polling && !outline ? (
-            <Card className="p-12 flex flex-col items-center justify-center text-center min-h-[300px]">
-              <div className="w-16 h-16 bg-background border border-border rounded-xl flex items-center justify-center mb-6">
-                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <div className="space-y-6">
+              <div className="text-center mb-6 animate-in fade-in duration-300">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 text-primary mb-4 ring-4 ring-primary/5 animate-pulse">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground tracking-tight">Menyusun Kerangka...</h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                  Mengumpulkan referensi relevan dan mendesain struktur artikel yang solid berdasarkan judul yang Anda pilih.
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-4">Estimasi: 30–90 detik</p>
               </div>
-              <h3 className="text-lg font-extrabold  text-foreground tracking-tight mb-2">Menyiapkan Outline</h3>
-              <p className="text-xs text-muted-foreground max-w-sm">
-                Mencari literatur, menyintesis temuan, dan menyusun kerangka artikel...
-              </p>
-              <p className="text-[10px] text-muted-foreground mt-4">Proses ini membutuhkan 30–90 detik.</p>
-            </Card>
+              
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i} className="p-4 border-border/50 bg-background/50 backdrop-blur-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Skeleton className="w-6 h-6 rounded" />
+                      <Skeleton className="h-5 flex-1" />
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                    <Skeleton className="h-3 w-2/3 ml-9 mb-2" />
+                    <div className="ml-9 space-y-1.5 pt-1">
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-4/5" />
+                      <Skeleton className="h-3 w-5/6" />
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
           ) : outline ? (
             <>
               <div className="text-center mb-2">
-                <h3 className="text-lg font-extrabold  text-foreground tracking-tight">Review Kerangka Artikel</h3>
+                <h3 className="text-lg font-semibold text-foreground tracking-tight">Review Kerangka Artikel</h3>
                 <p className="text-xs text-muted-foreground mt-1">Anda dapat mengedit judul bab dan poin-poin sebelum memulai penulisan.</p>
               </div>
 
@@ -718,7 +834,7 @@ export default function ResearchPage() {
             <div className="w-16 h-16 bg-background border border-border rounded-xl flex items-center justify-center mx-auto mb-6">
               <PenLine className="w-8 h-8 text-primary animate-pulse" />
             </div>
-            <h3 className="text-lg font-extrabold  text-foreground tracking-tight mb-2">Menulis Artikel</h3>
+            <h3 className="text-lg font-semibold text-foreground tracking-tight mb-2">Menulis Artikel</h3>
             <p className="text-xs text-muted-foreground mb-6">
               {writingProgress.current_section || "Memulai proses penulisan..."}
             </p>
@@ -740,43 +856,22 @@ export default function ResearchPage() {
         </div>
       )}
 
-      {/* ──────── Step 5: Review & Export ──────── */}
+      {/* ──────── Step 5: Selesai ──────── */}
       {step === 5 && review && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          {/* Score Hero */}
-          <Card className="relative overflow-hidden border-status-success/30">
-            <div className="absolute inset-0 bg-gradient-to-br from-status-success/5 via-transparent to-primary/5" />
+          {/* Success Card */}
+          <Card className="relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 pointer-events-none" />
             <div className="relative p-8 text-center">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-6 border-4 border-bg-main"
-                style={{
-                  background: review.overall_score >= 80
-                    ? "rgba(22, 163, 74, 0.15)"
-                    : review.overall_score >= 60
-                      ? "rgba(217, 119, 6, 0.15)"
-                      : "rgba(220, 38, 38, 0.15)",
-                }}
-              >
-                <span
-                  className={`text-3xl font-extrabold  ${
-                    review.overall_score >= 80
-                      ? "text-green-600"
-                      : review.overall_score >= 60
-                        ? "text-yellow-600"
-                        : "text-destructive"
-                  }`}
-                >
-                  {review.overall_score}
-                </span>
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-6 border border-primary/20">
+                <CheckCircle2 className="w-8 h-8 text-primary" />
               </div>
-              <h2 className="text-2xl font-extrabold  text-foreground tracking-tight mb-2">Artikel Selesai!</h2>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto mb-6">{review.review_summary}</p>
-
+              <h2 className="text-xl text-foreground tracking-tight mb-1">Artikel siap diunduh</h2>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-6">
+                Artikel telah ditulis dan disusun secara otomatis. Silakan unduh hasil akhirnya dalam format DOCX.
+              </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                <Button
-                  size="lg"
-                  onClick={handleDownload}
-                  disabled={downloading}
-                >
+                <Button size="lg" onClick={handleDownload} disabled={downloading}>
                   {downloading && <Loader2 className="w-4 h-4 animate-spin" />}
                   <Download className="w-4 h-4" />
                   Unduh DOCX
@@ -803,32 +898,10 @@ export default function ResearchPage() {
             </div>
           </Card>
 
-          {/* Issues */}
-          {review.issues && review.issues.length > 0 && (
-            <Card className="p-5">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Catatan Reviewer ({review.issues.length})</h4>
-              <div className="space-y-2">
-                {review.issues.map((issue: any, i: number) => (
-                  <div key={i} className="flex items-start gap-2 text-xs p-2.5 bg-background rounded-lg border border-border">
-                    <Badge
-                      variant={issue.severity === "critical" ? "destructive" : issue.severity === "major" ? "secondary" : "outline"}
-                      className="shrink-0 mt-0.5"
-                    >
-                      {issue.severity}
-                    </Badge>
-                    <div>
-                      <span className="text-foreground font-medium">{issue.description}</span>
-                      {issue.suggestion && (
-                        <p className="text-muted-foreground mt-0.5">{issue.suggestion}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
+          {/* Issues removed — editor agent handles silently */}
         </div>
       )}
+
 
       {/* Promotional Popup */}
       <Dialog open={showPromo} onOpenChange={setShowPromo}>

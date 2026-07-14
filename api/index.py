@@ -22,10 +22,15 @@ load_dotenv(dotenv_path="../.env", override=True)
 
 app = FastAPI(title="ResearchBuilder API")
 
+ALLOWED_ORIGINS = [
+    "https://researchbuilder.rafanovation.cloud",
+    "http://localhost:3000",   # dev
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

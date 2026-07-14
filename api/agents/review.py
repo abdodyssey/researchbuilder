@@ -1,19 +1,19 @@
 """
-Agent 6: Peer Reviewer — Review dan Scoring Artikel
-=====================================================
-Bertindak sebagai peer reviewer jurnal akademis:
-1. Membaca seluruh draft artikel
-2. Memberikan skor 0-100
-3. Mengidentifikasi issues (type, location, severity, suggestion)
-4. Menulis abstrak final (minimal 150 kata, struktur lengkap)
-5. Menyediakan keywords final
+Agent 6: Editor Final — Penyempurnaan Artikel Otomatis
+=======================================================
+Bertindak sebagai editor senior jurnal akademis yang menyempurnakan
+draft artikel secara otomatis. User tidak melihat skor atau catatan —
+mereka hanya menerima artikel yang sudah dipoles.
 
-Fitur khusus:
-- Methodology guard: mencegah LLM mengarang metode empiris
-  untuk tipe literature_review atau conceptual
-- Template-aware: menyesuaikan review dengan gaya jurnal target
-- Constraints-aware: flag jika abstrak/keywords tidak sesuai batas jurnal
-- Auto-retry (tenacity): max 2 attempt
+Tugas agent ini:
+1. Membaca seluruh draft artikel
+2. Menulis abstrak final yang substantif dan akurat (min. 150 kata)
+3. Menentukan keywords final (5-8 kata kunci)
+4. Memberikan satu kalimat ringkasan internal (disimpan di backend, tidak ditampilkan ke user)
+
+TIDAK lagi memberikan skor, issues, atau saran perbaikan ke user.
+Jika ada kekurangan dalam draft, agent ini langsung memperbaikinya
+di abstrak — bukan melaporkannya.
 """
 
 import json
@@ -24,104 +24,81 @@ from utils.prompt_builder import build_system_prompt
 from utils.token_counter import truncate_to_tokens
 from utils.llm_client import call_llm, extract_json
 
-SYSTEM = build_system_prompt("peer reviewer for academic journals")
-
+SYSTEM = build_system_prompt("senior academic journal editor finalizing article manuscripts")
 
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
 def run(inp: ReviewInput, article_type: str = "literature_review", template_text: str = "", constraints=None) -> ReviewOutput:
     """
-    Review artikel dan hasilkan skor + abstrak final.
-
-    Args:
-        inp: ReviewInput berisi focused_topic, research_questions, full_draft
-        article_type: "literature_review" | "conceptual" | "empirical" (untuk methodology guard)
-        template_text: Teks template jurnal target (opsional)
-        constraints: JournalConstraints (opsional, untuk validasi batas kata/keywords)
-
-    Returns:
-        ReviewOutput: overall_score, issues[], abstract, keywords_final, review_summary
+    Poles artikel sebagai editor: tulis abstrak final + keywords.
+    Tidak ada skor, tidak ada catatan, tidak ada keluhan — langsung sempurnakan.
     """
-    draft_text = truncate_to_tokens(inp.full_draft, 1200)
-    
-    # Determine constraints based on article_type
+    draft_text = truncate_to_tokens(inp.full_draft, 10000)
+
     methodology_constraint = ""
     if article_type == "literature_review":
         methodology_constraint = (
-            "- DILARANG KERAS mengklaim atau mengarang adanya metode survei empiris, kuesioner, wawancara, atau pengujian langsung dalam abstrak "
-            "karena tipe artikel ini adalah LITERATURE REVIEW (Tinjauan Literatur). Abstrak harus secara realistis menjelaskan bahwa artikel "
-            "merupakan studi tinjauan pustaka/sintesis literatur."
+            "- Artikel ini adalah LITERATURE REVIEW. Abstrak WAJIB menyebutkan ini adalah studi tinjauan pustaka. "
+            "DILARANG KERAS menyebut survei, kuesioner, atau pengumpulan data lapangan yang tidak ada."
         )
     elif article_type == "conceptual":
         methodology_constraint = (
-            "- DILARANG KERAS mengklaim adanya pengujian empiris fiktif, survei, atau kuesioner dalam abstrak karena tipe artikel ini adalah "
-            "CONCEPTUAL (Konseptual). Abstrak harus menjelaskan analisis konsep dan teoretis secara logis."
+            "- Artikel ini adalah CONCEPTUAL. Abstrak harus menjelaskan analisis konseptual/teoritis. "
+            "DILARANG mengarang pengujian empiris."
         )
-        
+
     template_instruction = ""
     if template_text:
-        template_instruction = f"\n- GAYA & OUTLINE PENULISAN TARGET: Sesuaikan gaya ringkasan dan format abstrak dengan panduan berikut jika ada:\n{template_text}"
+        template_instruction = f"\n- Sesuaikan gaya dan format abstrak dengan panduan berikut:\n{template_text}"
 
-    constraints_text = ""
-    if constraints:
-        constraints_text = f"""
-PANDUAN JURNAL UNTUK REVIEW:
-- Abstrak maksimal: {constraints.abstract_max_words} kata
-- Keywords: {constraints.keywords_min}-{constraints.keywords_max} kata kunci
-- Format sitasi: {constraints.citation_style}
-- Section wajib: {constraints.required_sections}
+    user_msg = f"""Kamu adalah editor senior jurnal akademis. Bacalah draft artikel di bawah ini dan sempurnakan.
 
-Dalam review, flag jika abstrak melebihi batas kata atau keywords kurang/lebih dari range.
-"""
-
-    user_msg = f"""
-Review artikel ilmiah berikut sebagai peer reviewer jurnal.
 Topik: "{inp.focused_topic}"
 Tipe Artikel: {article_type}
 Research questions: {inp.research_questions}
-Draft:
+
+Draft Artikel:
 {draft_text}
 
-ATURAN PEMBUATAN ABSTRAK (WAJIB DIPATUHI):
-{methodology_constraint}
-- Abstrak harus substantif (minimal 150 kata) dengan struktur lengkap: latar belakang (background), tujuan (objective), metode (methods), hasil/temuan (findings), dan kesimpulan (conclusion).
-- Tulis abstrak secara jujur dan akurat sesuai dengan isi draft di atas. Jangan mengarang data atau metode yang tidak ada di dalam draft.{template_instruction}
+TUGAS KAMU:
+1. Tulis ABSTRAK FINAL yang substantif (minimal 150 kata). Struktur: latar belakang -> tujuan -> metode -> temuan -> kesimpulan.
+   Tulis abstrak secara akurat sesuai isi draft. JANGAN mengarang data atau metode yang tidak ada.
+   {methodology_constraint}{template_instruction}
 
-{constraints_text}
+2. Tentukan 5-8 KEYWORDS FINAL yang paling representatif untuk artikel ini.
 
-Balas HANYA dengan JSON valid, tanpa teks lain:
+3. Tulis satu kalimat ringkasan internal (bukan untuk user - hanya untuk log sistem).
+
+DILARANG menggunakan bahasa lebay, dramatis, atau klise seperti "menyingkap tabir", "di era modern ini".
+Gunakan bahasa akademik yang padat, lugas, dan objektif.
+
+Balas HANYA JSON valid:
 {{
-  "overall_score": 60,
-  "issues": [
-    {{
-      "type": "coherence",
-      "location": "Pendahuluan",
-      "description": "...",
-      "suggestion": "...",
-      "severity": "minor"
-    }}
-  ],
-  "abstract": "tulis abstrak substantif minimal 150 kata dengan struktur lengkap: latar belakang (background), tujuan (objective), metode (methods), hasil/temuan (findings), dan kesimpulan (conclusion)",
-  "keywords_final": ["keyword1", "keyword2"],
-  "review_summary": "..."
-}}
-"""
+  "overall_score": 75,
+  "issues": [],
+  "abstract": "tulis abstrak final substantif minimal 150 kata di sini...",
+  "keywords_final": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+  "review_summary": "Satu kalimat ringkasan internal untuk log sistem."
+}}"""
+
     raw = call_llm(
         messages=[
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": user_msg},
         ],
-        temperature=0.3,
+        temperature=0.2,
         max_tokens=2000,
         agent="review",
     )
-    
+
     try:
         data = extract_json(raw)
     except Exception as e:
-        print(f"[ERROR] Failed to parse JSON response from Review Agent: {e}")
-        print(f"[DEBUG] Raw response from Groq was:\n{raw}")
+        print(f"[ERROR] Failed to parse JSON response from Editor Agent: {e}")
         raise
-        
-    return ReviewOutput(**data)
 
+    # Pastikan issues selalu kosong - tidak ditampilkan ke user
+    data["issues"] = []
+    data["overall_score"] = data.get("overall_score", 75)
+
+    return ReviewOutput(**data)

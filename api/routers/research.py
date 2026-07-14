@@ -110,21 +110,24 @@ def _fallback_synthesis(focused_topic: str, research_questions: list[str]):
     }
 
 
-def _fallback_outline(focused_topic: str, title: str, bahasa: str, structure_preset: str):
-    if structure_preset == "skripsi":
+def _fallback_outline(focused_topic: str, title: str, bahasa: str, structure_preset: str = "imrad"):
+    """Fallback IMRAD outline jika AI outline agent gagal."""
+    lang = bahasa.lower()
+    if lang == "id":
         secs = [
-            ("sec_1", "Pendahuluan", "Menyajikan latar belakang dan tujuan", ["Latar belakang masalah", "Rumusan masalah", "Tujuan penelitian"], 500),
-            ("sec_2", "Tinjauan Pustaka", "Mengkaji teori dan literatur terkait", ["Landasan teori", "Penelitian terdahulu", "Kerangka konseptual"], 800),
-            ("sec_3", "Metodologi", "Menjelaskan metode penelitian", ["Pendekatan penelitian", "Teknik pengumpulan data", "Analisis data"], 500),
-            ("sec_4", "Hasil dan Pembahasan", "Menyajikan dan membahas temuan", ["Hasil analisis", "Pembahasan temuan", "Implikasi"], 800),
-            ("sec_5", "Kesimpulan", "Merangkum kesimpulan dan saran", ["Kesimpulan utama", "Saran penelitian selanjutnya"], 400),
+            ("sec_01", "Pendahuluan", "Latar belakang isu penelitian dan tujuan tinjauan.", ["Latar belakang masalah", "Rumusan masalah", "Tujuan penelitian"], 600),
+            ("sec_02", "Metode Pencarian Literatur", "Protokol pencarian: database, kata kunci, kriteria inklusi/eksklusi.", ["Database yang digunakan", "Kata kunci pencarian", "Kriteria seleksi artikel"], 500),
+            ("sec_03", "Temuan dan Analisis", "Penyajian dan sintesis temuan dari literatur yang dikaji.", ["Temuan literatur", "Analisis tematik", "Perbandingan antar studi"], 1000),
+            ("sec_04", "Pembahasan", "Interpretasi pola temuan, research gap, dan implikasi.", ["Interpretasi hasil", "Research gap", "Implikasi praktis dan teoretis"], 800),
+            ("sec_05", "Kesimpulan", "Rangkuman kontribusi dan rekomendasi penelitian lanjutan.", ["Kesimpulan utama", "Saran penelitian selanjutnya"], 350),
         ]
     else:
         secs = [
-            ("sec_1", "Introduction", "Menyajikan latar belakang dan tujuan", ["Latar belakang masalah", "Rumusan masalah", "Tujuan penelitian"], 500),
-            ("sec_2", "Methods", "Menjelaskan metode penelitian", ["Pendekatan penelitian", "Pencarian literatur", "Kriteria seleksi"], 500),
-            ("sec_3", "Results", "Menyajikan temuan utama", ["Temuan literatur", "Analisis tematik", "Perbandingan studi"], 800),
-            ("sec_4", "Discussion", "Membahas implikasi temuan", ["Interpretasi hasil", "Keterbatasan", "Implikasi praktis dan teoretis", "Saran penelitian lanjutan"], 700),
+            ("sec_01", "Introduction", "Background of research issue and review objectives.", ["Background", "Problem statement", "Research objectives"], 600),
+            ("sec_02", "Literature Search Methods", "Search protocol: databases, keywords, inclusion/exclusion criteria.", ["Databases used", "Search keywords", "Article selection criteria"], 500),
+            ("sec_03", "Findings and Analysis", "Thematic presentation and synthesis of findings.", ["Literature findings", "Thematic analysis", "Cross-study comparison"], 1000),
+            ("sec_04", "Discussion", "Interpretation of finding patterns, gaps, and implications.", ["Result interpretation", "Research gaps", "Theoretical and practical implications"], 800),
+            ("sec_05", "Conclusion", "Summary of contributions and future research recommendations.", ["Main conclusions", "Future research recommendations"], 350),
         ]
     return {
         "title": title or f"[Fallback] Tinjauan Sistematis: {focused_topic}",
@@ -135,6 +138,7 @@ def _fallback_outline(focused_topic: str, title: str, bahasa: str, structure_pre
         ],
         "estimated_total_words": sum(s[4] for s in secs),
     }
+
 
 
 def _fallback_review(focused_topic: str, sections: list[dict]):
@@ -290,12 +294,6 @@ def _bg_run_literature_to_outline(
             else:
                 research_gaps_str.append(str(gap))
 
-        structure_hint = ""
-        if structure_preset == "imrad":
-            structure_hint = "Gunakan struktur IMRAD: Introduction, Methods, Results, and Discussion."
-        elif structure_preset == "skripsi":
-            structure_hint = "Gunakan struktur skripsi: Pendahuluan, Tinjauan Pustaka, Metodologi, Hasil & Pembahasan, Kesimpulan."
-
         try:
             outline_out = a4.run(OutlineInput(
                 focused_topic=t["focused_topic"],
@@ -306,7 +304,8 @@ def _bg_run_literature_to_outline(
                 research_gaps=research_gaps_str,
                 bahasa=state.input.bahasa,
                 references=refs,
-            ), template_text=structure_hint)
+                structure_preset=structure_preset,
+            ))
             outline_data = outline_out.model_dump()
         except Exception as e:
             print(f"Outline failed, using fallback: {e}")
@@ -366,9 +365,19 @@ def _bg_run_writing_to_review(research_id: str, pipeline_id: str, user_id: str):
             state.background_status = f"Menulis bab {idx+1}/{len(sections)}: {section.title}"
             save_state(state, OUTPUT_DIR)
 
+            previous_content = ""
+            if idx > 0:
+                prev_secs = "\n".join([f"## {s['title']}\n{s['content']}" for s in written_sections[-2:]])
+                previous_content = f"Ini adalah 2 bab terakhir yang telah ditulis sebelumnya. Pastikan bab '{section.title}' ini menyambung secara natural dan TIDAK mengulang perkenalan atau poin yang sudah dibahas di bab sebelumnya:\n\n{prev_secs}"
+
             try:
                 result = a5.write_section(
-                    a5.WritingInput(section=section, context=context, references_detail=refs),
+                    a5.WritingInput(
+                        section=section, 
+                        context=context, 
+                        references_detail=refs,
+                        previous_content=previous_content if previous_content else None
+                    ),
                     template_text="",
                 )
             except Exception as e:

@@ -29,7 +29,9 @@ def run(inp: SynthesisInput) -> SynthesisOutput:
     Referensi di-truncate ke 1500 token agar muat di context window LLM.
     """
     refs_text = refs_to_text([r.model_dump() for r in inp.references])
-    refs_text = truncate_to_tokens(refs_text, 1500)
+    # Tingkatkan limit context window ke 8000 token agar LLM dapat melihat detail referensi lebih dalam,
+    # mengingat model modern (seperti GPT-4o, Claude 3.5, Gemini) memiliki context window yang sangat besar.
+    refs_text = truncate_to_tokens(refs_text, 8000)
 
     user_msg = f"""
 Focused topic: "{inp.focused_topic}"
@@ -42,6 +44,7 @@ Sintesis referensi di atas. Manfaatkan metadata tahun & jumlah sitasi untuk meni
 kebaruan (novelty) dan pengaruh tiap sumber. Untuk research_gaps, dasarkan celah pada
 bukti nyata dari literatur — misalnya keterbatasan yang berulang, area yang kurang diteliti,
 atau isu terkini yang belum tercakup oleh paper-paper bersitasi tinggi.
+DILARANG KERAS menggunakan bahasa dramatis, metafora murahan (seperti "menyingkap tabir", "menggali lebih dalam"). Gunakan nada akademik yang padat, lugas, dan objektif.
 
 Return JSON:
 {{

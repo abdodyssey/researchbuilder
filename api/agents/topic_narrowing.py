@@ -61,10 +61,9 @@ Return JSON dengan struktur:
     return TopicNarrowingOutput(**data)
 
 
-# Preset struktur artikel: digunakan di prompt agar LLM paham format target
+# Satu-satunya struktur yang didukung
 STRUCTURE_PRESETS = {
     "imrad": "Introduction, Methods, Results, and Discussion (IMRAD)",
-    "skripsi": "Pendahuluan, Tinjauan Pustaka, Metodologi, Hasil & Pembahasan, Kesimpulan",
     "custom": "Bebas, sesuaikan dengan topik",
 }
 

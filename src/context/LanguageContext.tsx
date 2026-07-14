@@ -33,6 +33,19 @@ const translations = {
     
     // General
     "language": "Bahasa",
+    
+    // Research Wizard
+    "research.step_topic": "Topik",
+    "research.step_title": "Pilih Judul",
+    "research.step_outline": "Outline",
+    "research.step_writing": "Penulisan",
+    "research.step_result": "Hasil",
+    
+    "research.topic_title": "Masukkan Topik Penelitian",
+    "research.topic_desc": "Deskripsikan tema penelitian yang ingin Anda tulis.",
+    "research.topic_placeholder": "Contoh: Pengaruh kecerdasan buatan terhadap efisiensi...",
+    "research.target_lang": "Bahasa Target",
+    "research.btn_search_title": "Cari Judul",
   },
   en: {
     // Menu
@@ -56,6 +69,19 @@ const translations = {
     
     // General
     "language": "Language",
+    
+    // Research Wizard
+    "research.step_topic": "Topic",
+    "research.step_title": "Select Title",
+    "research.step_outline": "Outline",
+    "research.step_writing": "Writing",
+    "research.step_result": "Result",
+    
+    "research.topic_title": "Enter Research Topic",
+    "research.topic_desc": "Describe the research theme you want to write about.",
+    "research.topic_placeholder": "Example: The impact of artificial intelligence on efficiency...",
+    "research.target_lang": "Target Language",
+    "research.btn_search_title": "Generate Titles",
   }
 };
 

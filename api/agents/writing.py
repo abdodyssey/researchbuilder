@@ -147,7 +147,7 @@ def write_section(inp: WritingInput, template_text: str = "", constraints=None) 
     relevant_refs = get_relevant_references(inp.section, inp.references_detail, top_n=4)
     
     refs_text = refs_to_citation_list(relevant_refs)
-    refs_text = truncate_to_tokens(refs_text, 6000)
+    refs_text = truncate_to_tokens(refs_text, 8000)
 
     # Get allowed reference IDs for validation (allow any valid global reference ID)
     global_allowed_ids = {
@@ -155,15 +155,20 @@ def write_section(inp: WritingInput, template_text: str = "", constraints=None) 
         for r in inp.references_detail
     }
 
-    # Cek apakah section ini adalah Metodologi
-    is_methodology = any(x in inp.section.title.lower() for x in ["method", "metode", "metodologi"])
+    # Deteksi section yang memerlukan instruksi khusus berdasarkan scaffold IMRAD
+    title_lower = inp.section.title.lower()
+    is_methodology = any(x in title_lower for x in [
+        "method", "metode", "metodologi", "literature search",
+        "metode pencarian",  # IMRAD lit review ID
+    ])
     methodology_instruction = ""
     if is_methodology:
         methodology_instruction = """
-KHUSUS UNTUK METODOLOGI PENELITIAN:
-- DILARANG KERAS mengarang eksperimen empiris fiktif, kuesioner fiktif, wawancara fiktif, atau pengumpulan data lapangan fiktif yang tidak benar-benar dilakukan.
-- Jelaskan metode penelitian secara realistis sebagai studi berbasis literatur (literature review), analisis data sekunder, studi komparatif literatur, atau sintesis konseptual berdasarkan referensi yang tersedia.
-- Rincikan langkah-langkah pencarian, penyaringan, dan pengelompokan literatur secara sistematis."""
+KHUSUS UNTUK SECTION METODE/METODOLOGI:
+- Jika ini adalah literature review: jelaskan protokol pencarian (database, kata kunci, kriteria inklusi/eksklusi). JANGAN mengarang survei, kuesioner, atau wawancara lapangan fiktif.
+- Jika ini adalah empirical study: jelaskan desain, sampel, instrumen, dan metode analisis secara realistis.
+- Jika ini adalah conceptual: jelaskan pendekatan analisis konseptual dan sumber literatur yang digunakan.
+- DILARANG KERAS mengarang data responden, eksperimen, atau instrumen yang tidak nyata."""
 
     constraints_text = ""
     if constraints:
@@ -180,6 +185,10 @@ PANDUAN JURNAL:
 - Bahasa output: {constraints.language}
 """
 
+    prev_context_prompt = ""
+    if hasattr(inp, "previous_content") and inp.previous_content:
+        prev_context_prompt = f"\n\nKONTEKS BAB SEBELUMNYA (JANGAN DIULANG, LANJUTKAN DARI SINI):\n{inp.previous_content}"
+
     user_msg = f"""Tulis section artikel ilmiah dalam bahasa {inp.context.bahasa}.
 
 ATURAN SITASI — WAJIB DIIKUTI:
@@ -194,11 +203,12 @@ ATURAN PENULISAN:
 - Jangan ulangi ide dari section lain
 - Gaya: akademik, objektif, mengalir dalam paragraf
 - Target: {inp.section.word_target} kata (toleransi ±20%)
+- DILARANG KERAS menggunakan bahasa dramatis atau metafora (contoh: "menyingkap tabir", "di era modern ini", "menggali lebih dalam"). Gunakan bahasa akademik yang padat, lugas, dan objektif.
 - HINDARI KALIMAT FILLER ATAU PENGULANGAN TEMPLATE di akhir/awal section (seperti "Dengan demikian, penelitian ini berkontribusi...", "Diharapkan penelitian ini...", dll.). Tulisan harus mengalir secara profesional menyambung ke bagian berikutnya.{methodology_instruction}
 - GAYA PENULISAN TARGET: Sesuaikan gaya, nada, dan layout penulisan dengan pedoman template target berikut jika ada:
 {template_text}
 
-{constraints_text}
+{constraints_text}{prev_context_prompt}
 
 Section: "{inp.section.title}"
 Poin yang harus dibahas:

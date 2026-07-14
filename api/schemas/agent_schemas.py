@@ -102,6 +102,7 @@ class OutlineInput(BaseModel):
     research_gaps: list[str]
     bahasa: Literal["id", "en"] = "id"
     references: list[Reference] = []
+    structure_preset: str = "imrad"
 
 class OutlineOutput(BaseModel):
     title: str
@@ -122,6 +123,7 @@ class WritingInput(BaseModel):
     section: Section
     context: WritingContext
     references_detail: list[Reference]
+    previous_content: Optional[str] = None
 
 class WritingSectionOutput(BaseModel):
     section_id: str

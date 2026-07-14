@@ -162,6 +162,7 @@ def list_user_runs(user_id: str) -> list[dict]:
             review_out = (stages.get("review") or {}).get("output") or {}
             token_total = (data.get("token_usage") or {}).get("total") or {}
             runs.append({
+                "research_id": job.id,
                 "pipeline_id": data.get("pipeline_id"),
                 "created_at": data.get("created_at"),
                 "status": data.get("status"),

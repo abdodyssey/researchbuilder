@@ -449,7 +449,8 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
 
     if webhook_secret and not allow_mock:
         if not signature:
-            print("[WEBHOOK] WARNING: Missing x-mayar-signature", flush=True)
+            print("[WEBHOOK] Blocked: missing x-mayar-signature", flush=True)
+            raise HTTPException(status_code=401, detail="Missing webhook signature")
         else:
             expected = hmac.new(
                 webhook_secret.encode(), body, hashlib.sha256
@@ -458,11 +459,10 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
                 print("[WEBHOOK] Signature valid ✓", flush=True)
             else:
                 print(
-                    f"[WEBHOOK] WARNING: Signature mismatch — expected={expected} | got={signature}",
+                    f"[WEBHOOK] Blocked: signature mismatch",
                     flush=True,
                 )
-                # TODO: uncomment setelah konfirmasi format signature dari Mayar:
-                # raise HTTPException(status_code=400, detail="Invalid signature")
+                raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     try:
         payload = json.loads(body)

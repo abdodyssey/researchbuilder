@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Loader2,
   Plus,
+  Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +28,7 @@ import {
 import { useApiQuery } from "@/hooks/useApiQuery";
 
 interface DocumentRun {
+  research_id: string;
   pipeline_id: string;
   created_at: string;
   status: "running" | "completed" | "failed";
@@ -202,6 +204,17 @@ export default function DocumentsPage() {
                                 </Button>
                               </a>
                             )}
+                            {(run.status === "running" || run.status === "draft") && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon-sm" 
+                                className="text-primary hover:text-primary hover:bg-primary/10" 
+                                title="Lanjutkan Sesi"
+                                onClick={() => router.push(`/research?id=${run.research_id}`)}
+                              >
+                                <Play className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon-sm"
@@ -251,6 +264,17 @@ export default function DocumentsPage() {
                           Unduh
                         </Button>
                       </a>
+                    )}
+                    {(run.status === "running" || run.status === "draft") && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-primary hover:bg-primary/5"
+                        onClick={() => router.push(`/research?id=${run.research_id}`)}
+                      >
+                        <Play className="w-3.5 h-3.5" />
+                        Lanjutkan
+                      </Button>
                     )}
                     <Button
                       variant="ghost"

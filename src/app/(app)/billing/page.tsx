@@ -190,14 +190,14 @@ export default function BillingPage() {
               <CardContent className="p-5 lg:p-6 flex flex-col h-full justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-lg">{pkg.label}</h3>
+                    <h3 className="font-medium text-lg">{pkg.label}</h3>
                     {i === 1 && <Badge variant="default" className="text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider">Terpopuler</Badge>}
                   </div>
                   <p className="text-sm text-muted-foreground min-h-[40px]">{pkg.desc}</p>
                   
                   <div className="mt-4 mb-6 flex items-baseline gap-1 whitespace-nowrap">
-                    <span className="text-lg font-semibold text-muted-foreground">Rp</span>
-                    <span className="text-3xl lg:text-4xl font-extrabold tracking-tight">
+                    <span className="text-lg font-medium text-muted-foreground">Rp</span>
+                    <span className="text-3xl lg:text-4xl font-bold tracking-tight">
                       {pkg.price.toLocaleString()}
                     </span>
                   </div>
@@ -220,7 +220,7 @@ export default function BillingPage() {
                 
                 <Button
                   variant={i === 1 ? "default" : "outline"}
-                  className={`w-full mt-8 font-semibold ${i === 1 ? 'hover:bg-primary/90' : 'hover:bg-muted'}`}
+                  className={`w-full mt-8 font-medium ${i === 1 ? 'hover:bg-primary/90' : 'hover:bg-muted'}`}
                   onClick={() => handleBuy(pkg.key)}
                   disabled={buying === pkg.key}
                 >

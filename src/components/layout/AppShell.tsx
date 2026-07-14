@@ -41,6 +41,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -68,6 +78,7 @@ function AppSidebar() {
   const { t } = useLanguage();
   const pathname = usePathname();
   const { isMobile } = useSidebar();
+  const [showLogoutAlert, setShowLogoutAlert] = useState(false);
 
   if (!user) return null;
 
@@ -205,7 +216,10 @@ function AppSidebar() {
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem 
-                  onClick={logout}
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setShowLogoutAlert(true);
+                  }}
                   className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
@@ -216,6 +230,23 @@ function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+
+      <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Konfirmasi Keluar</AlertDialogTitle>
+            <AlertDialogDescription>
+              Apakah Anda yakin ingin keluar dari aplikasi? Anda harus login kembali untuk melanjutkan sesi riset Anda.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={logout} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Ya, Keluar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sidebar>
   );
 }
@@ -268,7 +299,7 @@ function MainHeader({
           {pathname !== "/dashboard" && (
             <>
               <ChevronRight className="h-3.5 w-3.5" />
-              <span className="font-semibold text-foreground tracking-tight">{pageTitle}</span>
+              <span className="font-medium text-foreground tracking-tight">{pageTitle}</span>
             </>
           )}
         </div>
