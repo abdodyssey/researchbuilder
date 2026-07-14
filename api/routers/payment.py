@@ -455,6 +455,7 @@ async def webhook_mayar(request: Request, db: Session = Depends(get_db)):
     return {"status": "success", "message": "Pembayaran dibatalkan oleh gateway"}
 
 
+
 @router.get("/payments/history")
 async def api_payment_history(
     current_user: User = Depends(get_current_user),
@@ -472,7 +473,7 @@ async def api_payment_history(
     Returns:
         List of { id (8-char display), tokens_added, amount, status, created_at }
     """
-    page_size = min(max(page_size, 1), 50)  # clamp: 1–50
+    page_size = min(max(page_size, 1), 50)  # clamp: 1-50
     offset = (page - 1) * page_size
 
     payments = (
@@ -494,87 +495,3 @@ async def api_payment_history(
         for p in payments
     ]
 
-
-@router.get("/payment/mock-checkout", response_class=HTMLResponse)
-async def mock_checkout_page(payment_id: str, package: str, email: str, redirect_url: Optional[str] = "/"):
-    pkg = get_package(package) or {"label": package, "price": 0, "tokens": 0}
-    pkg_label = pkg["label"]
-    amount = pkg["price"]
-    tokens = pkg["tokens"]
-    amount_str = f"Rp {amount:,}".replace(",", ".")
-
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ResearchBuilder — Sandboxed Checkout</title>
-    <style>
-        :root {{
-            --bg-main: #f8fafc; --bg-card: #ffffff; --border-color: #e2e8f0;
-            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
-            --color-primary: #4f46e5; --color-primary-hover: #4338ca; --color-success: #16a34a;
-        }}
-        @media (prefers-color-scheme: dark) {{
-            :root {{
-                --bg-main: #09090b; --bg-card: #18181b; --border-color: #27272a;
-                --text-primary: #fafafa; --text-secondary: #a1a1aa; --text-muted: #71717a;
-            }}
-        }}
-        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        body {{ background: var(--bg-main); color: var(--text-primary); font-family: system-ui, sans-serif;
-               display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }}
-        .card {{ width: 100%; max-width: 420px; background: var(--bg-card); border: 1px solid var(--border-color);
-                border-radius: 8px; padding: 32px; text-align: center; }}
-        .badge {{ display: inline-flex; gap: 6px; background: rgba(79,70,229,0.1); color: var(--color-primary);
-                 border: 1px solid rgba(79,70,229,0.2); font-size: 10px; font-weight: 700; padding: 3px 10px;
-                 border-radius: 4px; text-transform: uppercase; margin-bottom: 20px; }}
-        h2 {{ font-size: 1.25rem; font-weight: 800; margin-bottom: 6px; }}
-        .desc {{ color: var(--text-muted); font-size: 0.75rem; margin-bottom: 24px; }}
-        .details {{ background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px;
-                   padding: 16px; text-align: left; margin-bottom: 24px; font-size: 0.8125rem; }}
-        .row {{ display: flex; justify-content: space-between; margin-bottom: 10px; }}
-        .row:last-child {{ margin-bottom: 0; padding-top: 10px; border-top: 1px solid var(--border-color); font-weight: 700; }}
-        .label {{ color: var(--text-secondary); font-size: 0.75rem; }}
-        .value {{ color: var(--text-primary); font-size: 0.8125rem; font-weight: 500; }}
-        .highlight {{ color: var(--color-primary); font-weight: 700; }}
-        .btn {{ width: 100%; background: var(--color-primary); color: #fff; border: none; padding: 10px 16px;
-               font-weight: 600; font-size: 0.8125rem; border-radius: 6px; cursor: pointer; }}
-        .btn:hover {{ background: var(--color-primary-hover); }}
-        .btn-cancel {{ background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border-color); margin-top: 8px; }}
-        .status {{ display: none; margin-top: 16px; padding: 10px; border-radius: 6px; font-size: 0.8125rem;
-                  background: rgba(22,163,74,0.1); border: 1px solid rgba(22,163,74,0.2); color: var(--color-success); }}
-    </style>
-</head>
-<body>
-    <div class="card">
-        <span class="badge">Sandbox Mode</span>
-        <h2>Simulasi Pembayaran</h2>
-        <p class="desc">Gerbang pembayaran tiruan untuk pengujian lokal</p>
-        <div class="details">
-            <div class="row"><span class="label">Produk</span><span class="value">Token {pkg_label} ({tokens:,} token)</span></div>
-            <div class="row"><span class="label">Email</span><span class="value">{email}</span></div>
-            <div class="row"><span class="label">ID Transaksi</span><span class="value" style="font-family:monospace;font-size:0.75rem">{payment_id}</span></div>
-            <div class="row"><span class="label">Total</span><span class="value highlight">{amount_str}</span></div>
-        </div>
-        <button id="btn-pay" class="btn">Bayar Sekarang</button>
-        <button id="btn-cancel" class="btn btn-cancel" onclick="location.href='{redirect_url}'">Batal</button>
-        <div id="status" class="status">Pembayaran Berhasil! Mengalihkan...</div>
-    </div>
-    <script>
-        document.getElementById('btn-pay').addEventListener('click', async function() {{
-            this.disabled = true; this.textContent = 'Memproses...';
-            try {{
-                const r = await fetch('/api/webhook/mayar', {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json', 'x-mock-payment': 'true'}},
-                    body: JSON.stringify({{event: "payment.success", data: {{paymentId: "{payment_id}", amount: {amount}, customer: {{email: "{email}"}}}}}})
-                }});
-                if (r.ok) {{ document.getElementById('status').style.display = 'block'; setTimeout(() => location.href = "{redirect_url}", 2000); }}
-                else {{ throw new Error('Failed'); }}
-            }} catch(e) {{ alert('Gagal: ' + e.message); this.disabled = false; this.textContent = 'Bayar Sekarang'; }}
-        }});
-    </script>
-</body>
-</html>"""
-    return HTMLResponse(content=html)
