@@ -55,10 +55,10 @@ export default function LandingPage() {
 
   const agentSteps = [
     {
-      name: "1. Tentukan Topik & Referensi",
+      name: "1. Tentukan Topik",
       title: "Eksplorasi Topik Awal",
       icon: Search,
-      desc: "Masukkan topik riset Anda beserta dokumen PDF/DOCX referensi. Sistem akan langsung mengekstraksi dan menyintesis fokus penelitian terbaik."
+      desc: "Masukkan topik riset Anda. Sistem akan langsung mengekstraksi dan menyintesis fokus penelitian terbaik menggunakan basis data akademik."
     },
     {
       name: "2. Pilih Judul Akademis",
@@ -96,12 +96,8 @@ export default function LandingPage() {
       a: "Ya. ResearchBuilder menerapkan isolasi data multi-user yang sangat ketat di tingkat basis data. Pengguna lain sama sekali tidak dapat mengakses, melihat, atau mengunduh draf atau riwayat riset Anda."
     },
     {
-      q: "Bolehkah saya menggunakan dokumen referensi mandiri?",
-      a: "Bisa. Anda dapat mengunggah file referensi utama dalam bentuk PDF atau DOCX pada tahap pertama. Model AI akan membaca dan mengekstrak informasi relevan dari dokumen Anda tersebut."
-    },
-    {
       q: "Bagaimana sistem penggunaan token dihitung?",
-      a: "Pemakaian token dihitung secara proporsional sesuai jumlah panjang dokumen, referensi, dan teks yang diproses maupun dihasilkan oleh model AI. Anda bisa top-up token kapan saja melalui menu Token & Tagihan. Token tidak hangus (no expiry)."
+      a: "Pemakaian token dihitung secara proporsional sesuai jumlah panjang teks yang diproses maupun dihasilkan oleh model AI. Anda bisa top-up token kapan saja melalui menu Token & Tagihan. Token tidak hangus (no expiry)."
     }
   ];
 
@@ -258,12 +254,12 @@ export default function LandingPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
             <CardHeader>
-              <Merge className="w-6 h-6 text-primary mb-2" />
-              <CardTitle className="text-lg">Dukungan Referensi Mandiri</CardTitle>
+              <Search className="w-6 h-6 text-primary mb-2" />
+              <CardTitle className="text-lg">Eksplorasi Basis Data Akademik</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Unggah dokumen referensi utama Anda (PDF/DOCX) dan biarkan sistem membaca serta mensintesis isinya menjadi dasar penelitian yang kuat.
+                Sistem secara otomatis mencari literatur dan jurnal yang relevan dari repositori penelitian global untuk mensintesis ide riset Anda.
               </p>
             </CardContent>
           </Card>

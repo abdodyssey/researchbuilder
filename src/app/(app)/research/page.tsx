@@ -530,41 +530,6 @@ export default function ResearchPage() {
                     <option value="en">English</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    accept=".pdf,.docx"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        setUploadedFile(e.target.files[0]);
-                      }
-                    }}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs h-7 px-2"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload className="w-3 h-3 mr-1" />
-                    {uploadedFile ? uploadedFile.name : "Upload Referensi (PDF/DOCX)"}
-                  </Button>
-                  {uploadedFile && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => {
-                        setUploadedFile(null);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
-                      }}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  )}
-                </div>
               </div>
               <div className="text-xs text-muted-foreground">{tema.length} karakter</div>
             </div>
