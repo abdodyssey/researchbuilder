@@ -26,7 +26,9 @@ export function useConnectionStatus(pollInterval = 15000) {
         method: "GET",
         signal: controller.signal,
         cache: "no-store",
-        mode: "no-cors" // no-cors prevents CORS preflight issues
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
       });
       clearTimeout(timeout);
 
