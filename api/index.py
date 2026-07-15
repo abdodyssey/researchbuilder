@@ -20,16 +20,14 @@ from routers.runs import router as runs_router
 
 app = FastAPI(title="ResearchBuilder API")
 
-ALLOWED_ORIGINS = [
-    "https://researchbuilder.rafanovation.cloud",
-    "https://researchbuilder.vercel.app",
-    "http://localhost:3000",   # dev
-]
 
+# Menggunakan allow_origins=["*"] dan allow_credentials=False karena auth sepenuhnya
+# berbasis Bearer Token (di header Authorization), bukan cookies. Ini membuat CORS
+# aman & kompatibel dengan domain dinamis Vercel (staging/preview).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
