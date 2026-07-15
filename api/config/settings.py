@@ -8,22 +8,23 @@ import warnings
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
     # Core app configs
     ENVIRONMENT: str = "development"
     SECRET_KEY: str = ""
-    
+
     # DB Config
     DATABASE_URL: str
-    
+
     # APIs
     GROQ_API_KEY: str = "missing_api_key_on_vercel"
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     SEMANTIC_SCHOLAR_API_KEY: str | None = None
-    
+
     # Mayar
     MAYAR_API_KEY: str | None = None
-    
+
     # Mailer (Resend)
     RESEND_API_KEY: str | None = None
     EMAIL_FROM: str = "ResearchBuilder <noreply@rafanovation.cloud>"
@@ -35,8 +36,9 @@ class Settings(BaseSettings):
             str(Path(__file__).parent.parent / ".env"),
         ),
         env_file_encoding="utf-8",
-        extra="ignore"
+        extra="ignore",
     )
+
 
 settings = Settings()
 
@@ -45,7 +47,7 @@ if not settings.SECRET_KEY:
     if settings.ENVIRONMENT.lower() == "production":
         raise RuntimeError(
             "SECRET_KEY environment variable wajib di-set di produksi. "
-            "Generate dengan: python -c \"import secrets; print(secrets.token_hex(32))\""
+            'Generate dengan: python -c "import secrets; print(secrets.token_hex(32))"'
         )
     warnings.warn(
         "SECRET_KEY tidak di-set — menggunakan key acak sementara (dev only). "
