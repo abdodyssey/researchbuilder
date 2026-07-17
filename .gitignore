@@ -10,6 +10,7 @@ output/
 !templates/index.html
 !README.md
 !deploy/*.md
+!docs/*.md
 .vercel
 api/data/*.db
 

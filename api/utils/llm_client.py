@@ -170,50 +170,104 @@ def track_usage(pipeline_id: str, agent: str, usage: dict):
         }
 
 
+def call_openrouter(
+    messages: list, temperature: float = 0.3, max_tokens: int = 1000, agent: str = ""
+) -> str:
+    """Fallback LLM call to OpenRouter."""
+    try:
+        from openai import OpenAI
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=settings.OPENROUTER_API_KEY,
+        )
+        resp = client.chat.completions.create(
+            model=settings.OPENROUTER_MODEL,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            extra_headers={
+                "HTTP-Referer": "https://researchbuilder.com",
+                "X-Title": "ResearchBuilder",
+            }
+        )
+        if agent:
+            _record_resp_usage(agent, resp)
+        return resp.choices[0].message.content
+    except Exception as e:
+        print(f"[ERROR] OpenRouter call failed: {e}")
+        raise
+
+
 def call_llm(
     messages: list, temperature: float = 0.3, max_tokens: int = 1000, agent: str = ""
 ) -> str:
     """
-    Fungsi utama untuk memanggil LLM (Groq).
+    Fungsi utama untuk memanggil LLM (Groq) dengan fallback ke OpenRouter.
 
     Fitur:
+    - Direkt ke OpenRouter jika Groq API Key tidak dikonfigurasi
     - Retry 2x jika rate limited (sleep 2s between)
     - Auto-fallback ke model kecil (llama-3.1-8b) jika model utama gagal
+    - Fallback ke OpenRouter jika semua pemanggilan Groq gagal
     - Token usage otomatis dicatat jika agent name diberikan
-
-    Args:
-        messages:    List chat messages [{"role": "system/user", "content": "..."}]
-        temperature: Kreativitas LLM (0.0-1.0, rendah = deterministik)
-        max_tokens:  Batas maksimal token output
-        agent:       Nama agent pemanggil (untuk token tracking)
-
-    Returns:
-        String response dari LLM
     """
     import time
+
+    # Check if Groq API Key is available and not a placeholder
+    has_groq = (
+        settings.GROQ_API_KEY
+        and settings.GROQ_API_KEY != "missing_api_key_on_vercel"
+        and not settings.GROQ_API_KEY.startswith("missing_api_key")
+    )
+
+    if not has_groq and settings.OPENROUTER_API_KEY:
+        print("[INFO] Groq API Key not set. Directing request to OpenRouter...")
+        return call_openrouter(messages, temperature, max_tokens, agent)
+
     model = get_current_model()
     fallback_model = "llama-3.1-8b-instant"
 
-    for attempt in range(1, 3):
-        try:
-            resp = get_client().chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            _record_resp_usage(agent, resp)
-            return resp.choices[0].message.content
-        except groq.RateLimitError as e:
-            print(f"\n[WARNING] Rate limit hit for model {model} (Attempt {attempt}/3).")
-            if attempt < 2:
-                sleep_time = 2
-                print(f"[INFO] Sleeping for {sleep_time} seconds before retrying...")
-                time.sleep(sleep_time)
-                continue
-            else:
+    try:
+        for attempt in range(1, 3):
+            try:
+                resp = get_client().chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                _record_resp_usage(agent, resp)
+                return resp.choices[0].message.content
+            except groq.RateLimitError as e:
+                print(f"\n[WARNING] Rate limit hit for model {model} (Attempt {attempt}/2).")
+                if attempt < 2:
+                    sleep_time = 2
+                    print(f"[INFO] Sleeping for {sleep_time} seconds before retrying...")
+                    time.sleep(sleep_time)
+                    continue
+                else:
+                    if model != fallback_model:
+                        print(f"[INFO] Falling back to {fallback_model} due to Rate Limit...")
+                        _mark_fallback(fallback_model, agent)
+                        try:
+                            resp = get_client().chat.completions.create(
+                                model=fallback_model,
+                                messages=messages,
+                                temperature=temperature,
+                                max_tokens=max_tokens,
+                            )
+                            _record_resp_usage(agent, resp)
+                            return resp.choices[0].message.content
+                        except Exception as fe:
+                            print(f"[ERROR] Fallback model {fallback_model} failed: {fe}")
+                            raise
+                    raise
+            except groq.APIStatusError as e:
+                print(
+                    f"\n[ERROR] Groq API Status Error: {e.status_code} - {e.message} for model {model}"
+                )
                 if model != fallback_model:
-                    print(f"[INFO] Falling back to {fallback_model} due to Rate Limit...")
+                    print(f"[INFO] Falling back temporarily to {fallback_model} due to API status error...")
                     _mark_fallback(fallback_model, agent)
                     try:
                         resp = get_client().chat.completions.create(
@@ -225,29 +279,18 @@ def call_llm(
                         _record_resp_usage(agent, resp)
                         return resp.choices[0].message.content
                     except Exception as fe:
-                        print(f"[ERROR] Fallback model {fallback_model} failed: {fe}")
+                        print(f"[ERROR] Fallback model {fallback_model} also failed: {fe}")
                         raise
                 raise
-        except groq.APIStatusError as e:
-            print(
-                f"\n[ERROR] Groq API Status Error: {e.status_code} - {e.message} for model {model}"
-            )
-            if model != fallback_model:
-                print(f"[INFO] Falling back temporarily to {fallback_model} due to API status error...")
-                _mark_fallback(fallback_model, agent)
-                try:
-                    resp = get_client().chat.completions.create(
-                        model=fallback_model,
-                        messages=messages,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                    )
-                    _record_resp_usage(agent, resp)
-                    return resp.choices[0].message.content
-                except Exception as fe:
-                    print(f"[ERROR] Fallback model {fallback_model} also failed: {fe}")
-                    raise
-            raise
+    except Exception as e:
+        if settings.OPENROUTER_API_KEY:
+            print(f"[WARNING] Groq failed completely ({e}). Falling back to OpenRouter...")
+            try:
+                return call_openrouter(messages, temperature, max_tokens, agent)
+            except Exception as ore:
+                print(f"[ERROR] OpenRouter fallback also failed: {ore}")
+                raise e
+        raise
 
 
 def repair_json_newlines_and_quotes(text: str) -> str:

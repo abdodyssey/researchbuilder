@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     SEMANTIC_SCHOLAR_API_KEY: str | None = None
     OPENALEX_EMAIL: str | None = None
     OPENALEX_API_KEY: str | None = None
+    OPENROUTER_API_KEY: str | None = None
+    OPENROUTER_MODEL: str = "meta-llama/llama-3.3-70b-instruct"
 
     # Mayar
     MAYAR_API_KEY: str | None = None
