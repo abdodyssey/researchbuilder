@@ -32,6 +32,7 @@ jobs:
             # Restart via supervisord (installed via: uv tool install supervisor)
             SUPERVISOR_SOCK="$HOME/.config/supervisor/supervisor.sock"
             if [ -S "$SUPERVISOR_SOCK" ]; then
+              supervisorctl -c ~/.config/supervisor/supervisord.conf update
               supervisorctl -c ~/.config/supervisor/supervisord.conf restart researchbuilder
             else
               supervisord -c ~/.config/supervisor/supervisord.conf
