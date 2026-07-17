@@ -37,11 +37,18 @@ def get_client():
 # Diperlukan karena background tasks berjalan di thread berbeda.
 _thread_local = threading.local()
 
-# In-memory store untuk token usage per pipeline.
-# Dibatasi _MAX_USAGE_ENTRIES agar tidak membengkak di long-running server.
 _usage_store: dict = {}
 _usage_store_lock = threading.Lock()
 _MAX_USAGE_ENTRIES = 200
+
+
+def get_fallback_used() -> str | None:
+    return getattr(_thread_local, "fallback_model_used", None)
+
+
+def _mark_fallback(model: str, agent: str):
+    _thread_local.fallback_model_used = model
+    print(f"[WARNING] Fallback to {model} triggered by agent '{agent}' — output quality may be reduced.")
 
 
 def set_active_pipeline_id(pipeline_id: str):
@@ -207,6 +214,7 @@ def call_llm(
             else:
                 if model != fallback_model:
                     print(f"[INFO] Falling back to {fallback_model} due to Rate Limit...")
+                    _mark_fallback(fallback_model, agent)
                     try:
                         resp = get_client().chat.completions.create(
                             model=fallback_model,
@@ -226,6 +234,7 @@ def call_llm(
             )
             if model != fallback_model:
                 print(f"[INFO] Falling back temporarily to {fallback_model} due to API status error...")
+                _mark_fallback(fallback_model, agent)
                 try:
                     resp = get_client().chat.completions.create(
                         model=fallback_model,

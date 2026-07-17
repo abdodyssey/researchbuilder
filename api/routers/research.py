@@ -400,6 +400,21 @@ def _bg_run_writing_to_review(research_id: str, pipeline_id: str, user_id: str):
         state = mark_stage(state, "draft_adaptation", "done", {"skipped": True})
         save_state(state, OUTPUT_DIR)
 
+        # Polish pass — per-section quality improvement
+        state.background_status = "Memoles kualitas penulisan..."
+        save_state(state, OUTPUT_DIR)
+        for idx, sec in enumerate(written_sections):
+            try:
+                polished = a5.polish_section(
+                    sec["title"], sec["content"], bahasa=state.input.bahasa
+                )
+                written_sections[idx]["content"] = polished
+                written_sections[idx]["word_count"] = len(polished.split())
+            except Exception as e:
+                print(f"Polish section {idx+1} failed, keeping original: {e}")
+        state.stages["writing"].output = {"sections": written_sections}
+        save_state(state, OUTPUT_DIR)
+
         # Review
         state.background_status = "Melakukan review kualitas artikel..."
         save_state(state, OUTPUT_DIR)

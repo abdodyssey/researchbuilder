@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = "missing_api_key_on_vercel"
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     SEMANTIC_SCHOLAR_API_KEY: str | None = None
+    OPENALEX_EMAIL: str | None = None
+    OPENALEX_API_KEY: str | None = None
 
     # Mayar
     MAYAR_API_KEY: str | None = None

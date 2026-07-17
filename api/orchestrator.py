@@ -304,10 +304,16 @@ def run_pipeline(
                 state.background_status = f"Menulis bab {idx+1}/{len(sections)}: {section.title}"
                 save_state(state, output_dir)
 
+                previous_content = ""
+                if idx > 0:
+                    prev_secs = "\n".join([f"## {s['title']}\n{s['content']}" for s in written_sections[-2:]])
+                    previous_content = f"Ini adalah 2 bab terakhir yang telah ditulis sebelumnya. Pastikan bab '{section.title}' ini menyambung secara natural dan TIDAK mengulang perkenalan atau poin yang sudah dibahas di bab sebelumnya:\n\n{prev_secs}"
+
                 inp_sec = a5.WritingInput(
                     section=section,
                     context=context,
                     references_detail=refs,
+                    previous_content=previous_content if previous_content else None,
                 )
                 result = a5.write_section(inp_sec, template_text, constraints=state.journal_constraints)
                 written_sections.append(result.model_dump())

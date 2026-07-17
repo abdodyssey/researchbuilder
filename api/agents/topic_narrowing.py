@@ -17,6 +17,8 @@ from schemas.agent_schemas import TopicNarrowingInput, TopicNarrowingOutput, Tit
 from utils.prompt_builder import build_system_prompt
 from utils.llm_client import call_llm, call_llm_with_usage
 from tools.semantic_scholar import search as ss_search
+from tools.openalex import search as oa_search
+from tools.semantic_scholar import normalize_title
 
 SYSTEM = build_system_prompt("senior academic researcher specializing in topic scoping")
 
@@ -76,6 +78,14 @@ def _scan_literature(tema: str) -> str:
     """
     try:
         results = ss_search(tema, max_results=8, max_retries=2, retry_backoff=2.0)
+        try:
+            oa_results = oa_search(tema, max_results=6, max_retries=2, retry_backoff=2.0)
+            seen = {normalize_title(r["title"]) for r in results}
+            for r in oa_results:
+                if normalize_title(r["title"]) not in seen:
+                    results.append(r)
+        except Exception:
+            pass
         if not results:
             return ""
         lines = []
@@ -123,7 +133,7 @@ def generate_title_options(
     lit_block = ""
     if literature_context:
         lit_block = f"""
-LITERATUR TERKINI DARI SEMANTIC SCHOLAR (gunakan untuk identifikasi research gap & novelty):
+LITERATUR TERKINI (Semantic Scholar + OpenAlex) — gunakan untuk identifikasi research gap & novelty:
 {literature_context}
 
 Berdasarkan literatur di atas, identifikasi:

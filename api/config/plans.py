@@ -24,9 +24,9 @@ TEMPLATE_UPLOAD = True
 # jalan (mis. sisa 500 token tapi penulisan artikel butuh puluhan ribu).
 # Angka konservatif berdasarkan pemakaian tipikal Groq llama-3.3-70b.
 TOKEN_COST = {
-    "titles": 3_000,        # scan literatur + generate 3 judul
-    "literature": 20_000,   # literature search + synthesis + outline (banyak paper)
-    "writing": 25_000,      # penulisan semua bab + review + export
+    "titles": 3_000,
+    "literature": 30_000,
+    "writing": 45_000,
 }
 # Fallback minimum kalau nama operasi tidak dikenal.
 MIN_TOKENS_PER_OP = 3_000

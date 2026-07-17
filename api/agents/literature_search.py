@@ -23,7 +23,9 @@ from schemas.agent_schemas import (
     LiteratureSearchOutput,
     Reference,
 )
-from tools.semantic_scholar import multi_search
+from tools.semantic_scholar import multi_search as ss_multi_search
+from tools.semantic_scholar import normalize_title
+from tools.openalex import multi_search as oa_multi_search
 from utils.llm_client import call_llm
 from utils.prompt_builder import build_system_prompt
 from utils.token_counter import truncate_to_tokens
@@ -54,13 +56,22 @@ def run(inp: LiteratureSearchInput) -> LiteratureSearchOutput:
     if len(inp.research_questions) > 1:
         queries.append(inp.research_questions[1])
 
-    # Jalankan pencarian Semantic Scholar (sudah di-deduplikasi oleh judul).
-    # Budget retry dibatasi (2×, backoff 2s) + throttle antar-query agar total
-    # waktu terkendali walau API publik 429. Tanpa ini, 4 query × retry panjang
-    # bisa menyebabkan pencarian menggantung bermenit-menit.
-    raw_results = multi_search(
-        queries, max_per_query=4, max_retries=2, retry_backoff=2.0, inter_query_delay=1.0
+    # Jalankan pencarian dari kedua sumber: Semantic Scholar + OpenAlex
+    # Gabungkan dan dedup berdasarkan judul → roughly 2x paper pool
+    ss_results = ss_multi_search(
+        queries, max_per_query=6, max_retries=2, retry_backoff=2.0, inter_query_delay=1.0
     )
+    oa_results = oa_multi_search(
+        queries, max_per_query=6, max_retries=2, retry_backoff=2.0, inter_query_delay=1.0
+    )
+
+    seen_titles = {normalize_title(r["title"]) for r in ss_results}
+    raw_results = list(ss_results)
+    for r in oa_results:
+        norm = normalize_title(r["title"])
+        if norm and norm not in seen_titles:
+            seen_titles.add(norm)
+            raw_results.append(r)
 
     # Siapkan teks ringkasan hasil untuk dikirim ke LLM.
     # Sertakan metadata akademik (tahun, sitasi, venue) agar LLM bisa menilai
@@ -79,13 +90,13 @@ def run(inp: LiteratureSearchInput) -> LiteratureSearchOutput:
         )
 
     # Truncate agar tidak melebihi context window LLM
-    results_text = truncate_to_tokens(results_text, 6000)
+    results_text = truncate_to_tokens(results_text, 10000)
 
     user_msg = f"""
 Focused topic: "{inp.focused_topic}"
 Research questions: {inp.research_questions}
 
-Hasil pencarian paper akademik (Semantic Scholar):
+Hasil pencarian paper akademik (Semantic Scholar + OpenAlex):
 {results_text}
 
 Pilih maksimal {inp.max_references} paper paling relevan dengan focused topic dan research questions.

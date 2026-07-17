@@ -22,10 +22,11 @@ from utils.prompt_builder import build_system_prompt
 from utils.token_counter import truncate_to_tokens
 from utils.llm_client import call_llm, extract_json
 
-SYSTEM = build_system_prompt("academic writer producing formal research article sections")
+SYSTEM_JSON = build_system_prompt("academic writer producing formal research article sections")
+SYSTEM_PROSE = build_system_prompt("academic writer producing formal research article sections", output_format="Markdown")
 
 
-def get_relevant_references(section, all_references, top_n=4) -> list:
+def get_relevant_references(section, all_references, top_n=8) -> list:
     """
     Filter referensi: hanya kirim yang relevan ke LLM untuk section ini.
     Mencegah prompt overflow dan mengurangi hallucination sitasi.
@@ -133,33 +134,20 @@ def refs_to_citation_list(references) -> str:
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
 def write_section(inp: WritingInput, template_text: str = "", constraints=None) -> WritingSectionOutput:
-    """
-    Tulis satu section artikel ilmiah.
+    relevant_refs = get_relevant_references(inp.section, inp.references_detail, top_n=8)
 
-    Flow:
-      1. Filter referensi relevan untuk section ini (max 4)
-      2. Bangun prompt dengan aturan sitasi ketat + instruksi penulisan
-      3. Kirim ke LLM, terima JSON (fact_extraction → content)
-      4. Validasi: hapus sitasi yang tidak ada di daftar referensi global
-      5. Return WritingSectionOutput
-    """
-    # Filter references for this section to avoid prompt overflow and hallucination
-    relevant_refs = get_relevant_references(inp.section, inp.references_detail, top_n=4)
-    
     refs_text = refs_to_citation_list(relevant_refs)
-    refs_text = truncate_to_tokens(refs_text, 8000)
+    refs_text = truncate_to_tokens(refs_text, 12000)
 
-    # Get allowed reference IDs for validation (allow any valid global reference ID)
     global_allowed_ids = {
-        r.id.lower().strip() if hasattr(r, "id") else r.get("id", "").lower().strip() 
+        r.id.lower().strip() if hasattr(r, "id") else r.get("id", "").lower().strip()
         for r in inp.references_detail
     }
 
-    # Deteksi section yang memerlukan instruksi khusus berdasarkan scaffold IMRAD
     title_lower = inp.section.title.lower()
     is_methodology = any(x in title_lower for x in [
         "method", "metode", "metodologi", "literature search",
-        "metode pencarian",  # IMRAD lit review ID
+        "metode pencarian",
     ])
     methodology_instruction = ""
     if is_methodology:
@@ -170,12 +158,50 @@ KHUSUS UNTUK SECTION METODE/METODOLOGI:
 - Jika ini adalah conceptual: jelaskan pendekatan analisis konseptual dan sumber literatur yang digunakan.
 - DILARANG KERAS mengarang data responden, eksperimen, atau instrumen yang tidak nyata."""
 
+    # === PASS 1: Fact Extraction (JSON) ===
+    fact_prompt = f"""Ekstrak fakta-fakta spesifik dari referensi berikut yang relevan untuk menulis section "{inp.section.title}".
+
+Section purpose: {inp.section.purpose}
+Key points yang harus dibahas:
+{chr(10).join(f"- {p}" for p in inp.section.key_points)}
+
+DAFTAR REFERENSI:
+{refs_text}
+
+Untuk setiap fakta, sertakan ID referensi sumbernya. Fokus pada data kuantitatif, temuan spesifik, definisi, dan argumen kunci.
+
+Return JSON:
+{{
+  "facts": [
+    {{"fact": "deskripsi fakta spesifik", "ref_ids": ["ref_001"]}},
+    {{"fact": "fakta lainnya", "ref_ids": ["ref_002", "ref_003"]}}
+  ]
+}}"""
+
+    facts_raw = call_llm(
+        messages=[
+            {"role": "system", "content": SYSTEM_JSON},
+            {"role": "user", "content": fact_prompt},
+        ],
+        temperature=0.2,
+        max_tokens=2000,
+        agent="writing",
+    )
+    facts_data = extract_json(facts_raw)
+    facts_list = facts_data.get("facts", [])
+
+    facts_text = ""
+    for i, f in enumerate(facts_list, 1):
+        refs_str = ", ".join(f.get("ref_ids", []))
+        facts_text += f"{i}. {f.get('fact', '')} [{refs_str}]\n"
+
+    # === PASS 2: Prose Writing (Markdown) ===
     constraints_text = ""
     if constraints:
         abstract_note = ""
         if "abstrak" in inp.section.title.lower() or "abstract" in inp.section.title.lower():
             abstract_note = f"PENTING: Abstrak maksimal {constraints.abstract_max_words} kata. Format: {constraints.abstract_format}. Tanpa sitasi."
-        
+
         constraints_text = f"""
 PANDUAN JURNAL:
 {abstract_note}
@@ -189,70 +215,94 @@ PANDUAN JURNAL:
     if hasattr(inp, "previous_content") and inp.previous_content:
         prev_context_prompt = f"\n\nKONTEKS BAB SEBELUMNYA (JANGAN DIULANG, LANJUTKAN DARI SINI):\n{inp.previous_content}"
 
-    user_msg = f"""Tulis section artikel ilmiah dalam bahasa {inp.context.bahasa}.
+    prose_prompt = f"""Tulis section "{inp.section.title}" artikel ilmiah dalam bahasa {inp.context.bahasa}.
 
-ATURAN SITASI — WAJIB DIIKUTI:
-- Gunakan HANYA referensi yang ada di DAFTAR REFERENSI VALID di bawah.
-- Format sitasi: gunakan ID referensi dalam kurung siku, contoh: [ref_001], [ref_003].
-- JIKA informasi tidak ada di dalam referensi yang diberikan, JANGAN PERNAH MENGARANG atau MEMBUAT SITASI PALSU. 
-- DILARANG KERAS mengarang nama author atau tahun yang tidak ada di daftar referensi.
-- Jika tidak ada referensi yang mendukung sebuah argumen, tulis tanpa sitasi atau sebutkan bahwa data spesifik tidak ditemukan di literatur yang tersedia.
-
-ATURAN PENULISAN:
-- Fokus HANYA pada tujuan section: {inp.section.purpose}
-- Jangan ulangi ide dari section lain
-- Gaya: akademik, objektif, mengalir dalam paragraf
-- Target: {inp.section.word_target} kata (toleransi ±20%)
-- DILARANG KERAS menggunakan bahasa dramatis atau metafora (contoh: "menyingkap tabir", "di era modern ini", "menggali lebih dalam"). Gunakan bahasa akademik yang padat, lugas, dan objektif.
-- HINDARI KALIMAT FILLER ATAU PENGULANGAN TEMPLATE di akhir/awal section (seperti "Dengan demikian, penelitian ini berkontribusi...", "Diharapkan penelitian ini...", dll.). Tulisan harus mengalir secara profesional menyambung ke bagian berikutnya.{methodology_instruction}
-- GAYA PENULISAN TARGET: Sesuaikan gaya, nada, dan layout penulisan dengan pedoman template target berikut jika ada:
-{template_text}
-
-{constraints_text}{prev_context_prompt}
-
-Section: "{inp.section.title}"
-Poin yang harus dibahas:
-{chr(10).join(f"- {p}" for p in inp.section.key_points)}
-
-DAFTAR REFERENSI VALID:
-{refs_text}
-
-Konteks:
+KONTEKS:
 - Topik: {inp.context.focused_topic}
 - Tipe: {inp.context.article_type}
 - Positioning: {inp.context.positioning_statement}
+- Tujuan section: {inp.section.purpose}
 
-Balas HANYA JSON valid:
-{{
-  "section_id": "{inp.section.id}",
-  "title": "{inp.section.title}",
-  "fact_extraction": "Langkah 1: Ekstrak fakta-fakta spesifik dari referensi beserta ID sitasinya yang akan digunakan pada bab ini.",
-  "content": "Langkah 2: Tulis isi section penuh dalam paragraf markdown berdasarkan fakta di atas.",
-  "word_count": 0,
-  "citations_used": ["ref_001"]
-}}"""
+POIN YANG HARUS DIBAHAS:
+{chr(10).join(f"- {p}" for p in inp.section.key_points)}
 
-    raw = call_llm(
+FAKTA YANG SUDAH DIEKSTRAK DARI REFERENSI (gunakan sebagai bahan penulisan):
+{facts_text}
+
+ATURAN SITASI:
+- Gunakan ID referensi dalam kurung siku: [ref_001], [ref_003]
+- HANYA gunakan ref_id yang muncul di fakta di atas
+- Jika informasi tidak punya sumber, tulis tanpa sitasi — JANGAN mengarang
+
+ATURAN PENULISAN:
+- Target: {inp.section.word_target} kata (toleransi ±20%)
+- Gaya: akademik, objektif, padat — SETIAP kalimat harus membawa informasi atau analisis
+- Tulis dalam paragraf yang mengalir, bukan daftar poin
+- DILARANG: bahasa dramatis, metafora, kalimat filler, pengulangan template
+- Bandingkan dan evaluasi sumber secara kritis, jangan hanya mendaftar temuan{methodology_instruction}
+- GAYA PENULISAN TARGET: {template_text}
+{constraints_text}{prev_context_prompt}
+
+Tulis langsung dalam Markdown. JANGAN bungkus dalam JSON atau code block."""
+
+    content = call_llm(
         messages=[
-            {"role": "system", "content": SYSTEM},
-            {"role": "user", "content": user_msg},
+            {"role": "system", "content": SYSTEM_PROSE},
+            {"role": "user", "content": prose_prompt},
         ],
         temperature=0.3,
-        max_tokens=4000,
+        max_tokens=8000,
         agent="writing",
     )
-    data = extract_json(raw)
-    
-    # Sanitize content citations to strictly match global references
-    if "content" in data and data["content"]:
-        data["content"] = sanitize_citations(data["content"], global_allowed_ids)
-        
-    citations_used = data.get("citations_used", [])
-    if isinstance(citations_used, list):
-        data["citations_used"] = [c for c in citations_used if c.lower().strip() in global_allowed_ids]
-        
-    data["word_count"] = len(data.get("content", "").split())
-    return WritingSectionOutput(**data)
+
+    content = content.strip()
+    content = re.sub(r"^```(?:markdown)?", "", content).strip()
+    content = re.sub(r"```$", "", content).strip()
+
+    content = sanitize_citations(content, global_allowed_ids)
+
+    citations_used = list({m.lower().strip() for m in re.findall(r'ref_\d+', content)} & global_allowed_ids)
+
+    return WritingSectionOutput(
+        section_id=inp.section.id,
+        title=inp.section.title,
+        content=content,
+        word_count=len(content.split()),
+        citations_used=citations_used,
+    )
+
+
+def polish_section(title: str, content: str, bahasa: str = "id") -> str:
+    polish_prompt = f"""Perbaiki kualitas penulisan section "{title}" berikut. JANGAN ubah substansi, fakta, atau sitasi.
+
+Yang harus diperbaiki:
+1. Hapus kalimat filler dan pengulangan
+2. Perbaiki transisi antar paragraf agar mengalir natural
+3. Perkuat kalimat pembuka setiap paragraf (topic sentence)
+4. Pastikan setiap kalimat membawa informasi — hapus yang redundan
+5. Perbaiki diksi agar lebih akademik dan presisi
+6. Pertahankan semua sitasi [ref_xxx] persis seperti aslinya
+
+Bahasa output: {"Bahasa Indonesia" if bahasa == "id" else "English"}
+
+KONTEN ASLI:
+{content}
+
+Tulis ulang versi yang sudah dipoles. Output langsung dalam Markdown, tanpa JSON atau penjelasan."""
+
+    polished = call_llm(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROSE},
+            {"role": "user", "content": polish_prompt},
+        ],
+        temperature=0.2,
+        max_tokens=8000,
+        agent="writing",
+    )
+    polished = polished.strip()
+    polished = re.sub(r"^```(?:markdown)?", "", polished).strip()
+    polished = re.sub(r"```$", "", polished).strip()
+    return polished if len(polished.split()) > 50 else content
 
 
 def run(sections, context, references_detail, template_text: str = "", constraints=None) -> WritingOutput:

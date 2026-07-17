@@ -223,7 +223,7 @@ Return JSON (JANGAN ubah id, title, dan purpose dari scaffold di atas):
             {"role": "user", "content": user_msg},
         ],
         temperature=0.25,
-        max_tokens=2500,
+        max_tokens=3500,
         agent="outline",
     )
     raw = raw.strip()
