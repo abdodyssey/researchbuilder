@@ -39,6 +39,7 @@ class ResearchTitlesRequest(BaseModel):
     bahasa: Optional[str] = "id"
     document_type: Optional[str] = "artikel"
     structure_preset: Optional[str] = "imrad"
+    citation_style: Optional[str] = "apa"
 
 
 class SelectTitleRequest(BaseModel):
@@ -449,8 +450,9 @@ def _bg_run_writing_to_review(research_id: str, pipeline_id: str, user_id: str):
             keywords=review_data.get("keywords_final", []),
             review_score=review_data.get("overall_score", 0),
             models_used=[get_current_model()],
+            citation_style=getattr(state, "citation_style", "apa"),
         )
-        write_references(OUTPUT_DIR, refs_list)
+        write_references(OUTPUT_DIR, refs_list, citation_style=getattr(state, "citation_style", "apa"))
 
         history_dir = Path(OUTPUT_DIR) / "runs"
         shutil.copy(article_path, history_dir / f"draft_article_{pipeline_id}.md")
@@ -462,14 +464,14 @@ def _bg_run_writing_to_review(research_id: str, pipeline_id: str, user_id: str):
         try:
             from utils.docx_injector import inject_into_template, structured_doc_from_pipeline
             from utils.citation_formatter import format_citations_in_text, format_bibliography
-            formatted_refs = format_bibliography(refs_list, "default")
+            formatted_refs = format_bibliography(refs_list, getattr(state, "citation_style", "apa"))
             structured_doc = structured_doc_from_pipeline(
                 title=o.get("title", ""),
                 abstract=review_data.get("abstract", ""),
                 keywords=review_data.get("keywords_final", []),
                 sections=[{
                     "heading": sec.get("title", ""),
-                    "paragraphs": [format_citations_in_text(sec.get("content", ""), refs_list, "default")],
+                    "paragraphs": [format_citations_in_text(sec.get("content", ""), refs_list, getattr(state, "citation_style", "apa"))],
                 } for sec in written_sections],
                 references_formatted=[{"teks_sitasi": line.lstrip("- ")} for line in formatted_refs],
             )
@@ -523,6 +525,7 @@ async def api_research_titles(
         bahasa=req.bahasa,
         document_type=req.document_type,
         structure_preset=req.structure_preset,
+        citation_style=req.citation_style or "apa",
         uploaded_doc_text=None,
         user_id=current_user.id,
     )
@@ -564,6 +567,7 @@ async def api_research_select_title(
         bahasa=session.bahasa,
         user_id=current_user.id,
         document_type=session.document_type,
+        citation_style=getattr(session, "citation_style", "apa"),
     )
     pipeline_state = mark_stage(pipeline_state, "topic_narrowing", "done", {
         "focused_topic": selected.focused_topic,

@@ -78,6 +78,7 @@ export default function ResearchPage() {
   const [tema, setTema] = useState("");
   const [bahasa, setBahasa] = useState("id");
   const [structurePreset, setStructurePreset] = useState("imrad");
+  const [citationStyle, setCitationStyle] = useState("apa");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -202,6 +203,7 @@ export default function ResearchPage() {
         tema,
         bahasa,
         structure_preset: structurePreset,
+        citation_style: citationStyle,
       };
 
       if (uploadedFile) {
@@ -593,7 +595,7 @@ export default function ResearchPage() {
               onChange={(e) => setTema(e.target.value)}
             />
             <div className="mt-2 flex justify-between items-center">
-              <div className="flex gap-4">
+              <div className="flex flex-wrap gap-4">
                 <div className="flex items-center gap-2">
                   <label className="text-xs text-muted-foreground font-medium">{t("research.target_lang")}:</label>
                   <select
@@ -603,6 +605,20 @@ export default function ResearchPage() {
                   >
                     <option value="id">Indonesia</option>
                     <option value="en">English</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground font-medium">Gaya Sitasi:</label>
+                  <select
+                    className="text-xs bg-background border border-border rounded-md px-2 py-1 outline-none focus:border-primary/50"
+                    value={citationStyle}
+                    onChange={(e) => setCitationStyle(e.target.value)}
+                  >
+                    <option value="apa">APA (American Psychological Association)</option>
+                    <option value="ieee">IEEE (Engineering/Technical)</option>
+                    <option value="harvard">Harvard</option>
+                    <option value="chicago">Chicago</option>
+                    <option value="default">Default [ref_xxx]</option>
                   </select>
                 </div>
               </div>

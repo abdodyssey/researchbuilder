@@ -229,6 +229,7 @@ class ResearchSession(BaseModel):
     bahasa: Literal["id", "en"] = "id"
     document_type: str = "artikel"
     structure_preset: str = "imrad"
+    citation_style: str = "apa"
     uploaded_doc_text: Optional[str] = None
     title_options: Optional[list[TitleOption]] = None
     selected_title_index: Optional[int] = None
